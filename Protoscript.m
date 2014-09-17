@@ -1,9 +1,9 @@
 %%=============================================================================
-% NAME:   Protoscript.m
+% NAME:   Protoscript_v3.m
 % AUTHOR: Alexander Peterson
-% DATE:   12 Sept. 2014
-% DESCR:  This script contains prototype code to read through MACAv2-METDATA
-%         products.
+% DATE:   16 Sept. 2014
+% DESCR:  This script contains prototype code to read through one
+%         MACAv2-METDATA model and calculate last spring freeze and GSI days.
 % IN:     MACAv2-METDATA
 % OUT:    N/A
 % CALLS:  findlsf.m
@@ -43,120 +43,141 @@ VAR_NAME = {'tasmax';...
             'huss'};
 
 % Set target data by specifying index for above constants.
-MDL_TARGET = [1:20];
+%MDL_TARGET = [1:20];
+MDL_TARGET = [6];       % CNRM-CM5 for prototype run.
 EXP_TARGET = [1:2];
 VAR_TARGET = [2];
 
 % Create path suffix and prefix strings to be concatenated.
-PATH_PREFIX = 'maca_v2_metdata_2var_10pat_CONUS_';
-PATH_SUFFIX = {'_historical_tasmin.mat';...
+PATH_PREFIX = '/storage/DOWNSCALED/CMIP5/MACAv2-METDATA/';
+FILE_PREFIX = 'maca_v2_metdata_2var_10pat_CONUS_';
+FILE_SUFFIX = {'_historical_tasmin.mat';...
                '_rcp45_tasmin.mat';...
                '_rcp85_tasmin.mat'};
 
-% Break CONUS grid into regional subsets.
-LAT_START = [1 200 400];
-LAT_END = [199 399 585];
-LON_START = [1 300 600 900 1100];
-LON_END = [299 599 899 1099 1386];
+% Break CONUS grid into regional subsets. The more powerful the machine, the
+% larger the regional subsets can be.
+LAT_START = [1 201 401];
+LAT_END = [200 400 585];
+LON_START = [1 301 601 901 1101];
+LON_END = [300 600 900 1100 1386];
 
-% Create constant for number of years, lat, and lon.
-N_YEARS = 151;
+% Create constant for number of years, lat, lon, and models.
 N_LAT = 585;
 N_LON = 1386;
+N_MDL = 20;
+N_YRS = 244;      % Historical is 56 years, RCPs are both 94 years.
+N_DAY = 365;
 
-% Preallocate CONUS variables.
-lsf_CONUS = NaN(N_YEARS,N_LAT,N_LON);
-gsi_CONUS = NaN(N_YEARS,N_LON,N_LON);
+% Load day_length variable.
+load('day_length.mat','day_length')
 
 
 %%=============================================================================
 % Body of script to access and process MACA data. To do so, iterate over models
 % and experiments to concatenate strings and access the .mat files, using
-% nested loops to subset CONUS and process the data.
+% parallel processing to subset CONUS and process the data.
 %==============================================================================
 
+% Open parallel processor pool.
+if matlabpool('size') == 0
+    matlabpool open local 12
+end
+
+% Create new matlab file to store CONUS variables.
+write_dir = '/eddy/FALSE_SPRINGS/';
+m_new = matfile([write_dir,'false_springs.mat'],'Writable',true);
+m_new.lsf_CONUS = NaN(N_YRS,N_LAT,N_LON,N_MDL,'single');
+m_new.gsi_CONUS = NaN(N_YRS,N_LAT,N_LON,N_MDL,'single');
+
 % Model and experiment iteration. 
-for m=1:length(MDL_TARGET)
-    
+m = 1;  % for m=1:length(MDL_TARGET)
+
     % Subset model name using character array.
     model = char(MDL_NAME(MDL_TARGET(m)));
-
-    % Concatenate component strings for file path over experiments.
-    for e=1:3  % REFACTOR - should not be hard-coded.
+        
+    e = 1; % for e=1:3  % REFACTOR - should not be hard-coded.
 		
         % Create path string for each file.
-    	file_name = [PATH_PREFIX,model,char(PATH_SUFFIX(e))];
-    		
-    	% Set pointer as matfile.
-    	m = matfile(file_name);
+        file_name = [PATH_PREFIX,FILE_PREFIX,model,char(FILE_SUFFIX(e))];
+        		
+        % Set pointer as matfile.
+        file = matfile(file_name);
 
-        % Create variable to hold number of years.
-        n_years = size(m.data,2);
-
-        % Extract lat values for one model and calculate day length.
-        lat = m.lat;
-        if m == 1
-            for y=1:N_LAT
-                day_length(y,:) = calcdaylength(1:366,m.lat(y));    % REFACTOR - check files before continuing with this code.
-            end
-        end
+        % Create variable to hold number of years, switching on experiment.
+        if e == 1
+            yr_index = [1:56];
+        elseif e == 2
+            yr_index = [57:150];
+        else e == 3
+            yr_index = [151:244];
+     	end;
+        n_yrs = length(yr_index);
 
         %%=====================================================================
-    	% Iterate over CONUS by breaking lat/lon into regional subset, then
+        % Iterate over CONUS by breaking lat/lon into regional subset, then
         % iterating over regional subset to call findlsf function.
         %======================================================================
-    	
+        	
         for x=1:length(LON_START)
         
             % Break CONUS into regional lon subset.
             lon_subset = [LON_START(x):LON_END(x)];
-
+        
             for y=1:length(LAT_START)
                 
-                % Break CONUS into regional lat subset.
+                % Break CONUS into regional lat, day, and vpd subsets.
                 lat_subset = [LAT_START(y):LAT_END(y)];
-                day_subset = day_length(lat_subset,:);
-
-                % Preallocate subset variables.
-                lsf_subset = NaN(n_years,length(lat_subset),length(lon_subset));
-                gsi_subset = NaN(n_years,length(lat_subset),length(lon_subset));
-                vpd_subset = ones(length(lat_subset),1);
+                day_subset = day_length(:,lat_subset);
+                vpd_subset = ones(N_DAY,length(lat_subset));
 
                 % Call function, iterating over each lat/lon and year.
-                for i=1:length(lon_subset)
-                    for j=1:length(lat_subset)
-                        for yr=1:n_years
+                t_var = double(file.data(:,:,lat_subset,lon_subset));
 
-                            lsf_subset(yr,j,i) = findlsf(m.data(:,yr,j,i));
-                            gsi_subset(yr,j,i) = calcgsi(m.data(:,yr,j,i),...
-                                                         day_subset(j,:),...
-                                                         vpd_subset(j,:));
-                        
-                        end     % yr; n_years.
-                    end         % j; lat_subset.
-                end             % i; lon_subset.
+                %%=============================================================
+                % Process lon_subset using parallel function. To do so,
+                % preallocate for LSF and GSI, then begin parfor loop iterating
+                % over each lon_subset. Call findlsf and calcgsi on each
+                % lon_subset, then concatenate together.
+                %==============================================================
+		
+                % Create variables to store lengths of lat and lon.
+                n_lat=length(lat_subset);
+                n_lon=length(lon_subset);
 
-                % Patch regional subsets together.
-                lsf_CONUS(:,lat_subset,lon_subset) = lsf_subset;
-                gsi_CONUS(:,lat_subset,lon_subset) = gsi_subset;
+                % Preallocate subset variables.
+                lsf_subset = NaN(n_yrs,n_lat,n_lon);
+                gsi_subset = NaN(n_yrs,n_lat,n_lon);
+                
+                tic
+                % Parallel iteration over lon_subset.
+                parfor i=1:n_lon
+                    
+                    % Create temporary variable for each lon_subset.
+                    t_var2 = t_var(:,:,:,i);
+
+                    % Call parallel function.
+                    [lsf_sub,gsi_sub] = fscomponents(t_var2,...
+                                                     day_subset,...
+                                                     vpd_subset);
+                    
+                    % Concatenate subregional variables to subset.
+                    lsf_subset(:,:,i) = lsf_sub;
+                    gsi_subset(:,:,i) = gsi_sub;
+
+                end     % i; lon_subset.
+                toc
+
+                % Patch regional subsets together for all models.
+                m_new.lsf_CONUS(yr_index,lat_subset,lon_subset,m) = ...
+                                                            single(lsf_subset);
+                m_new.gsi_CONUS(yr_index,lat_subset,lon_subset,m) = ...
+                                                            single(gsi_subset);
 
             end     % y; LAT_START.
         end         % x; LON_START.
+     end            % e; Experiment loop.
+ end 		        % m; Model loop.
 
-        % Clear variables.
-        clear model file_name m n_years lat x lon_subset y lat_subset day_subset 
-        clear lsf_subset gsi_subset vpd_subset i j yr
-
-
-	end 	        % e; Experiment loop.
-end 		        % m; Model loop.
-
-
-
-
-
-
-
-
-
+matlabpool close;   % Close processor pool.
 

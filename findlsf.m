@@ -14,7 +14,7 @@ function [lsf] = findlsf(tmin,threshold)
 %% Check accumulated chilling hours below 7.2C base temperature; chilling hours
 % should exceed 200/1350 (citation?).
 tmin = tmin(1:181); 				% Cut days at June 31.
-tmin(tmin > 7.2) = 0;			% Zero all days above 7.2.
+tmin(tmin > 7.2) = 0;				% Zero all days above 7.2.
 chilling_days = -(nansum(tmin));	% Sum with inverse sign.
 
 %% Split on chilling_days, finding latest day in first half of the year.

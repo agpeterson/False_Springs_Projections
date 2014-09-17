@@ -1,0 +1,11 @@
+*.mat
+*.gdb
+*.mxd
+*.xlsx
+*.m~
+*.pdf
+*.png
+*.txt
+Retired/
+Figures/
+Neverland.m
