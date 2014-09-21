@@ -11,29 +11,24 @@
 
 function [lsf] = findlsf(tmin,threshold)
 
-%% Check accumulated chilling hours below 7.2C base temperature; chilling hours
-% should exceed 200/1350 (citation?).
-tmin = tmin(1:181); 				% Cut days at June 31.
-tmin(tmin > 7.2) = 0;				% Zero all days above 7.2.
-chilling_days = -(nansum(tmin));	% Sum with inverse sign.
+% Restrict days at June 31, Julian Date 181 to avoid running into fall freezes.
+tmin = tmin(1:181);
 
-%% Split on chilling_days, finding latest day in first half of the year.
-if chilling_days > 200
-	
-	% Find latest day of year at or below threshold.
-	freeze = max(find(tmin <= threshold));
+% Find latest day of year at or below threshold.
+freeze = max(find(tmin <= threshold));
 
-	% Quality check for NaNs.
-	if ~isempty(freeze) & sum(isnan(tmin)) < 20
-		lsf = freeze;
-	else 
-		lsf = NaN;
-	end
-
+% If freeze is not empty, set lsf equal to freeze value. If empty, set to 0.
+if ~isempty(freeze)
+	lsf = freeze;
 else
+	lsf = 0;
+end
 
+% Quality check for missing values; average over temperature - if NaN, set lsf
+% equal to NaN.
+tmin_mean = mean(tmin);
+if isnan(tmin_mean)
 	lsf = NaN;
-
-end 	% If statement.
+end
 
 end 	% Function.
