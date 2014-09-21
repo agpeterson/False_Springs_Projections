@@ -82,8 +82,11 @@ FUT_INDEX = [57:150] - 57 + 1;         % Sets FUT_INDEX as 1:94 for file access.
 % file exists, load from file. If file does not exist, pull lat from one model
 % and call calcdaylength function.
 if exist('day_length.mat') == 2
+
     load('day_length.mat','day_length')
+
 else
+
     % Create file name string.
     model = char(MDL_NAME(MDL_TARGET(1)));
     file_name = [PATH_PREFIX,FILE_PREFIX,model,char(FILE_SUFFIX(1))];
@@ -91,6 +94,7 @@ else
     % Create file pointer and pull latitude.
     file = matfile(file_name);
     lat = file.lat;
+    lon = file.lon;
 
     % Iterate over latitude to calculate day length for all days.
     for i=1:N_LAT
@@ -100,17 +104,33 @@ else
 
     % Save and clear variables.
     save('day_length.mat','day_length')
-    clear model file_name file lat
+    clear model file_name file
+
 end
 
 % Create/load lsf and gsi matfiles. If lsf.mat and gsi.mat exist, create
 % matfile pointers, else create new matlab files and fill with NaNs.
 if exist('lsf.mat') == 2 & exist('gsi.mat') == 2
-    lsf = matfile([write_dir,'lsf.mat'],'Writable',true);
-    gsi = matfile([write_dir,'gsi.mat'],'Writable',true);
+
+    lsf = matfile([WRITE_DIR,'lsf.mat'],'Writable',true);
+    gsi = matfile([WRITE_DIR,'gsi.mat'],'Writable',true);
+
 else
+
+    % Preallocate space with NaNs.
     lsf.lsf_CONUS = NaN(N_YRS,N_LAT,N_LON,N_MDL,'single');
     gsi.gsi_CONUS = NaN(N_YRS,N_LAT,N_LON,N_MDL,'single');
+
+    % Add model names to matfiles.
+    lsf.MDL_NAME = MDL_NAME;
+    gsi.MDL_NAME = MDL_NAME;
+
+    % Add lat/lon to matfiles.
+    lsf.lat = lat;
+    lsf.lon = lon;
+    gsi.lat = lat;
+    gsi.lon = lon;
+
 end
 
 
