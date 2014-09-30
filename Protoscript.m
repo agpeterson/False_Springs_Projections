@@ -110,7 +110,7 @@ end
 
 % Create/load lsf and gsi matfiles. If lsf.mat and gsi.mat exist, create
 % matfile pointers, else create new matlab files and fill with NaNs.
-if exist('lsf.mat') == 2 & exist('gsi.mat') == 2
+if exist('lsf.mat') == 2 && exist('gsi.mat') == 2
 
     lsf = matfile([WRITE_DIR,'lsf.mat'],'Writable',true);
     gsi = matfile([WRITE_DIR,'gsi.mat'],'Writable',true);
@@ -223,9 +223,9 @@ m = 6   % for m=1:length(MDL_TARGET)
                     t_var2 = t_var(:,:,:,i);
 
                     % Call parallel function.
-                    [lsf_sub,gsi_sub] = fscomponents(t_var2,...
-                                                     day_subset,...
-                                                     vpd_subset);
+                    [lsf_sub,gsi_sub] = findfscomponents(t_var2,...
+                                                         day_subset,...
+                                                         vpd_subset);
                     
                     % Concatenate subregional variables to subset.
                     lsf_subset(:,:,i) = lsf_sub;
@@ -247,3 +247,84 @@ m = 6   % for m=1:length(MDL_TARGET)
 
 matlabpool close;   % Close processor pool.
 
+
+%%=============================================================================
+% Find false springs using Spectrelight, not Thunder.
+%==============================================================================
+
+% Create constants, indices, though technically no need to separate based on
+% RCP.
+YRS_HST = 1:56;
+YRS_R45 = 57:150;       % 57+94-1
+YRS_R85 = 151:244;      % end-94+1
+N_LAT = 585;
+N_LON = 1386;
+N_MDL = 20;
+N_YRS = 244;            % Historical is 56 years, RCPs are both 94 years.
+N_DAY = 365;
+
+% Load GSI and LSF using matfile pointers.
+file = matfile('gsi.mat');
+gsi = file.gsi_CONUS(:,:,:,6);
+clear file
+
+file = matfile('lsf.mat');
+lsf = file.lsf_CONUS(:,:,:,6);
+clear file
+
+% Find years with false springs across all lat/lon points.
+fs = NaN(N_YRS,N_LAT,N_LON);
+for i=1:N_LON
+    for j=1:N_LAT
+        for k=1:N_YRS
+            if isnan(lsf(k,j,i)) || isnan(gsi(k,j,i))
+                fs(k,j,i) = NaN;
+            elseif lsf(k,j,i) >= (7+gsi(k,j,i))
+                fs(k,j,i) = 1;
+            else
+                fs(k,j,i) = 0;
+            end
+        end
+    end
+end
+
+% Separate based on RCP.
+gsi_hst = gsi(YRS_HST,:,:);
+gsi_r45 = gsi(YRS_R45,:,:);
+gsi_r85 = gsi(YRS_R85,:,:);
+
+lsf_hst = lsf(YRS_HST,:,:);
+lsf_r45 = lsf(YRS_R45,:,:);
+lsf_r85 = lsf(YRS_R85,:,:);
+
+fs_hst = fs(YRS_HST,:,:);
+fs_r45 = fs(YRS_R45,:,:);
+fs_r85 = fs(YRS_R85,:,:);
+
+save('gsi_v2.mat','gsi_hst','gsi_r45','gsi_r85')
+save('lsf_v2.mat','lsf_hst','lsf_r45','lsf_r85')
+save('fs_v2.mat','fs_hst','fs_r45','fs_r85')
+
+% Calculate FSEI for 1950-2005 period.
+fs_hst_sum = squeeze(sum(fs_hst,1));
+lsf_hst_sum = squeeze(sum(~isnan(lsf_hst),1));
+fsei_hst = (fs_hst_sum ./ lsf_hst_sum) * 100;
+save('fs_v2.mat','fsei_hst','-append')
+
+% Plot 1950-2005 GSI, LSF, and FSEI.
+map_title = 'Mean Last Spring Freeze Date 1950-2005';
+cb_type =
+cb_color =
+cb_units = 'Day of Year';
+cb_flip = 'No Flip';
+plotfscomponents(lsf_hst,1,181,20,colorbar_units,map_title,colorbar_flip)
+
+
+
+% Map historical GSI.
+gsi_hst = squeeze(nanmean(gsi,1));
+map_title = 'Mean Plant Green-up Date 1950-2005';
+colorbar_flip = 'No Flip';
+plotfscomponents(gsi_hst,1,181,20,colorbar_units,map_title,colorbar_flip)
+
+cb_type,cb_color,cb_units,cb_flip

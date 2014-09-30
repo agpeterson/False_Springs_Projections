@@ -1,5 +1,5 @@
 %%=============================================================================
-% NAME:   fscomponents.m
+% NAME:   findfscomponents.m
 % AUTHOR: Alexander Peterson
 % DATE:   12 Sept. 2014
 % DESCR:  This function iterates in parallel over the MACA dataset to determine
@@ -9,7 +9,7 @@
 % CALLS:  findlsf.m and calcgsi.m
 %==============================================================================
 
-function [lsf_sub,gsi_sub] = fscomponents(tmin,day_subset,vpd_subset);
+function [lsf_sub,gsi_sub] = findfscomponents(tmin,day_subset,vpd_subset);
 
 % Create variables for number of years and latitude.
 n_day = size(tmin,1);
