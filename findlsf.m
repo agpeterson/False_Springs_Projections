@@ -26,9 +26,9 @@ end
 
 % Quality check for missing values; average over temperature - if NaN, set lsf
 % equal to NaN.
-tmin_mean = mean(tmin);
-if isnan(tmin_mean)
-	lsf = NaN;
-end
+% tmin_mean = mean(tmin);
+% if isnan(tmin_mean)
+% 	lsf = NaN;
+% end
 
 end 	% Function.

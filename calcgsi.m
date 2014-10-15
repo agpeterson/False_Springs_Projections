@@ -19,18 +19,18 @@ function [gsi] = calcgsi(tmin,photoperiod,vpd)
 HOUR_LOW = 10;
 HOUR_HIGH = 11;
 f = find(photoperiod > HOUR_LOW & photoperiod < HOUR_HIGH);
-dayl(f) = (photoperiod(f)-HR_LOW) /HR_HIGH ;
-dayl(photoperiod <= HR_LOW) = 0;
-dayl(photoperiod >= HR_HIGH) = 1;
+dayl(f) = (photoperiod(f)-HOUR_LOW) /HOUR_HIGH ;
+dayl(photoperiod <= HOUR_LOW) = 0;
+dayl(photoperiod >= HOUR_HIGH) = 1;
 dayl = dayl';
 
 % Minimum temperature. Follow above.
 TMIN_LOW = -2;
 TMIN_HIGH = 5;
-f1 = find(tmin > T_LOW & tmin < T_HIGH);
-tmin(f1) = (tmin(f1)-T_LOW) /T_HIGH;
-tmin(tmin <= T_LOW) = 0;
-tmin(tmin >= T_HIGH) = 1;
+f1 = find(tmin > TMIN_LOW & tmin < TMIN_HIGH);
+tmin(f1) = (tmin(f1)-TMIN_LOW) /TMIN_HIGH;
+tmin(tmin <= TMIN_LOW) = 0;
+tmin(tmin >= TMIN_HIGH) = 1;
 
 % VPD. For now, we assume VPD is one for all lat/lon. Before actual use, this
 % needs to be double-checked for errors, especially regarding lower and upper
@@ -41,10 +41,10 @@ tmin(tmin >= T_HIGH) = 1;
 % vpd(vpd >= 4.1) = 0;
 VPD_LOW = 0.9;
 VPD_HIGH = 4.1;
-f1 = find(vpd > V_LOW & vpd < V_HIGH);
-vpd(f1) = 1.0 -(vpd(f1)-V_LOW) / V_HIGH;
-vpd(vpd <= V_LOW) = 1;
-vpd(vpd >= V_HIGH) = 0;
+f1 = find(vpd > VPD_LOW & vpd < VPD_HIGH);
+vpd(f1) = 1.0 -(vpd(f1)-VPD_LOW) / VPD_HIGH;
+vpd(vpd <= VPD_LOW) = 1;
+vpd(vpd >= VPD_HIGH) = 0;
 
 % Reshape dayl and calculate GSI.
 dayl = reshape(dayl,size(vpd,1),size(vpd,2));

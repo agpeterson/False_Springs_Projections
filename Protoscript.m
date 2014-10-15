@@ -266,13 +266,16 @@ N_DAY = 365;
 % Load GSI and LSF using matfile pointers.
 file = matfile('gsi.mat');
 gsi = file.gsi_CONUS(:,:,:,6);
+gsi = double(gsi);
 clear file
 
 file = matfile('lsf.mat');
 lsf = file.lsf_CONUS(:,:,:,6);
+lsf = double(lsf);
 clear file
 
-% Find years with false springs across all lat/lon points.
+
+% Find years with false springs across all lat/lon points. --------------------
 fs = NaN(N_YRS,N_LAT,N_LON);
 for i=1:N_LON
     for j=1:N_LAT
@@ -288,43 +291,559 @@ for i=1:N_LON
     end
 end
 
-% Separate based on RCP.
-gsi_hst = gsi(YRS_HST,:,:);
-gsi_r45 = gsi(YRS_R45,:,:);
-gsi_r85 = gsi(YRS_R85,:,:);
+% Calculate FSEI for four periods: 1950-2005, 2010-2039, 2040-2069, 2070-2099.
+YR_SERIES = horzcat([1950:2005],[2006:2099],[2006:2099]);
+FUT_START = find(YR_SERIES == 2020);
+FUT_END = find(YR_SERIES == 2049);
+YRS_IND = {[1:56] [FUT_START(1):FUT_END(1)] [FUT_START(2):FUT_END(2)]};
 
-lsf_hst = lsf(YRS_HST,:,:);
-lsf_r45 = lsf(YRS_R45,:,:);
-lsf_r85 = lsf(YRS_R85,:,:);
+% Preallocate, iterate over periods.
+fs_sum = NaN(length(YRS_IND),N_LAT,N_LON);
+fsei = NaN(length(YRS_IND),N_LAT,N_LON);
+for i=1:length(YRS_IND)
+    fs_sum(i,:,:) = sum(fs(YRS_IND{i},:,:),1);
+    fsei(i,:,:) = (fs_sum(i,:,:) ./ sum(~isnan(lsf(YRS_IND{i},:,:)),1)) * 100;
+end
 
-fs_hst = fs(YRS_HST,:,:);
-fs_r45 = fs(YRS_R45,:,:);
-fs_r85 = fs(YRS_R85,:,:);
 
-save('gsi_v2.mat','gsi_hst','gsi_r45','gsi_r85')
-save('lsf_v2.mat','lsf_hst','lsf_r45','lsf_r85')
-save('fs_v2.mat','fs_hst','fs_r45','fs_r85')
+% Find and plot normals and differences. --------------------------------------
+% Calculate 1950-2005 mean.
+lsf_hst_mean = squeeze(nanmean(lsf(YRS_HST,:,:),1));
+gsi_hst_mean = squeeze(nanmean(gsi(YRS_HST,:,:),1));
+fsei_hst = squeeze(fsei(1,:,:));
 
-% Calculate FSEI for 1950-2005 period.
-fs_hst_sum = squeeze(sum(fs_hst,1));
-lsf_hst_sum = squeeze(sum(~isnan(lsf_hst),1));
-fsei_hst = (fs_hst_sum ./ lsf_hst_sum) * 100;
-save('fs_v2.mat','fsei_hst','-append')
-
-% Plot 1950-2005 GSI, LSF, and FSEI.
-map_title = 'Mean Last Spring Freeze Date 1950-2005';
-cb_type =
-cb_color =
-cb_units = 'Day of Year';
+% Map historical values.
+data = fsei_hst;
+map_title = 'False Spring Exposure Index 1950-2005';
+cb_type = 'seq';
+cb_color = 'Blues';
+cb_units = 'Percent of Years';
 cb_flip = 'No Flip';
-plotfscomponents(lsf_hst,1,181,20,colorbar_units,map_title,colorbar_flip)
+plotfscomponents(data,0,100,10,map_title,cb_type,cb_color,cb_units,cb_flip)
+
+
+% Find difference between future and historical mean. -------------------------
+lsf_diff = NaN(N_YRS,N_LAT,N_LON);
+gsi_diff = NaN(N_YRS,N_LAT,N_LON);
+
+YR_SERIES = horzcat([1950:2005],[2006:2099],[2006:2099]);
+FUT_START = find(YR_SERIES == 2020);
+FUT_END = find(YR_SERIES == 2049);
+YRS_IND = {[FUT_START(1):FUT_END(1)] [FUT_START(2):FUT_END(2)]};
+
+lsf_fut_diff = NaN(length(YRS_IND),N_LAT,N_LON);
+gsi_fut_diff = NaN(length(YRS_IND),N_LAT,N_LON);
+
+for i=1:length(YRS_IND)
+    for j=1:N_YRS
+        lsf_diff(j,:,:) = squeeze(lsf(j,:,:)) - lsf_hst_mean(:,:);
+        gsi_diff(j,:,:) = squeeze(gsi(j,:,:)) - gsi_hst_mean(:,:);
+    end
+    lsf_fut_diff(i,:,:) = nanmean(lsf_diff(YRS_IND{i},:,:),1);
+    gsi_fut_diff(i,:,:) = nanmean(gsi_diff(YRS_IND{i},:,:),1);
+end
+
+data = squeeze(lsf_fut_diff(1,:,:));
+map_title = 'Difference in Mean Last Spring Freeze Date (2020-2049; RCP4.5)';
+cb_type = 'div';
+cb_color = 'RdBu';
+cb_units = 'Departure from 1950-2005 Mean (Days)';
+cb_flip = 'No Flip';
+plotfscomponents(data,-30,30,6,map_title,cb_type,cb_color,cb_units,cb_flip)
+
+
+% Relative change in FSEI between periods. New value minus old value, divided
+% by old value.
+fsei_r45 = squeeze(fsei(2,:,:));
+fsei_r85 = squeeze(fsei(3,:,:));
+
+fsei_r45_diff = fsei_r45 - fsei_hst;
+fsei_r85_diff = fsei_r85 - fsei_hst;
+
+% fsei_r45_change = ((fsei_r45 - fsei_hst) ./ fsei_hst)*100;
+% fsei_r85_change = ((fsei_r85 - fsei_hst) ./ fsei_hst)*100;
+
+% Map relative change.
+data = fsei_r85_diff;
+map_title = 'Difference in FSEI (2020-2049; RCP8.5)';
+cb_type = 'div';
+cb_color = 'RdBu';
+cb_units = 'Departure from 1950-2005 FSEI (%)';
+cb_flip = 'No Flip';
+plotfscomponents(data,-50,50,10,map_title,cb_type,cb_color,cb_units,cb_flip)
+
+
+% Create timeseries for Pullman. ----------------------------------------------
+load conus_grid
+pullman_lat = find(lat >= 46.7 & lat <= 46.75)
+pullman_lon = find(lon >= -117.2 & lon <= -117.15)
+
+pullman_gsi = gsi(:,pullman_lat,pullman_lon);
+pullman_lsf = lsf(:,pullman_lat,pullman_lon);
+pullman_fs = fs(:,pullman_lat,pullman_lon);
+
+pullman_gsi_r45 = squeeze(pullman_gsi(1:150));
+pullman_gsi_r85 = vertcat(pullman_gsi(1:56),pullman_gsi(151:end));
+
+pullman_lsf_r45 = squeeze(pullman_lsf(1:150));
+pullman_lsf_r85 = vertcat(pullman_lsf(1:56),pullman_lsf(151:end));
+
+
+% Calculate moving 30-year sum.
+SEMI_WINDOW = 15;
+N_DATA = size(pullman_fs(1:150),1);  % size of data.
+    
+for i=1:150
+    if i < SEMI_WINDOW + 1  % if i less than 16
+        window = [1:i+SEMI_WINDOW]';    % window is 1:31
+    elseif i > N_DATA - SEMI_WINDOW     % if i greater than 150 - 15
+        window = [i-SEMI_WINDOW:N_DATA]';
+    else
+        window = [i-SEMI_WINDOW:i+SEMI_WINDOW]';
+    end
+    pullman_fsei_r45(i,:) = (sum(pullman_fs(window)) ./ length(window)) * 100;
+end
+
+% Plot.
+SMOOTHING_WINDOW = 11;   % Number of years to smooth over; 5-1-5.
+gsi_r45 = smooth(pullman_gsi_r45,SMOOTHING_WINDOW,'lowess');
+gsi_r85 = smooth(pullman_gsi_r85,SMOOTHING_WINDOW,'lowess');
+lsf_r45 = smooth(pullman_lsf_r45,SMOOTHING_WINDOW,'lowess');
+lsf_r85 = smooth(pullman_lsf_r85,SMOOTHING_WINDOW,'lowess');
+fsei_r45 = pullman_fsei_r45;
+x = 1950:2099;
+
+
+% Use plotyy to plot LSF and GSI on left y-axis, FSEI on right.
+fig = figure('Position',[100 100 1000 618]);
+set(gcf,'Color','W')
+[ax,line1,line2] = ...
+plotyy([x',x'],[gsi_r45,lsf_r45],x',fsei_r45,'plot','stairs')
+axes(ax(1))
+hold on
+plot(x',gsi_r85,'linewidth',2,'linestyle','--','color',rgb('SteelBlue'));
+plot(x',lsf_r85,'linewidth',2,'linestyle','--','color',rgb('IndianRed'));
+set(ax(1),'ylim',[0 150],...
+          'ytick',[0:30:150],...
+          'ycolor','k',...
+          'fontsize',12);
+set(ax(2),'ylim',[0 100],...
+          'ytick',[0:20:100],...
+          'ycolor','k',...
+          'fontsize',12);
+set(line1,'linewidth',2);
+set(line2,'linewidth',2,'color','k');
+set(get(ax(1),'Ylabel'),'String','Day of Year','FontSize',14)
+set(get(ax(2),'Ylabel'),'String','False Spring Exposure Index','FontSize',14)
+h_legend = legend('RCP4.5 Green-up','RCP4.5 Last Spring Freeze',...
+                  'RCP8.5 Green-up','RCP8.5 Last Spring Freeze','FSEI')
+legend('boxoff')
+set(h_legend,'FontSize',12);
+title('Changes in LSF, GSI, and FS in Pullman, WA 1950-2099','FontSize',16)
 
 
 
-% Map historical GSI.
-gsi_hst = squeeze(nanmean(gsi,1));
-map_title = 'Mean Plant Green-up Date 1950-2005';
-colorbar_flip = 'No Flip';
-plotfscomponents(gsi_hst,1,181,20,colorbar_units,map_title,colorbar_flip)
 
-cb_type,cb_color,cb_units,cb_flip
+% RCP8.5
+fig = figure('Position',[100 100 1000 618]);
+set(gcf,'Color','W')
+[ax,line1,line2] = ...
+plotyy([x',x'],[gsi_r85,lsf_r85],x',fsei_r45,'plot','stairs')
+set(ax(1),'ylim',[0 150],...
+          'ytick',[0:30:150],...
+          'ycolor','k',...
+          'fontsize',12);
+set(ax(2),'ylim',[0 100],...
+          'ytick',[0:20:100],...
+          'ycolor','k',...
+          'fontsize',12);
+set(line1,'linewidth',2);
+set(line2,'linewidth',2,'color','k');
+set(get(ax(1),'Ylabel'),'String','Day of Year','FontSize',14)
+set(get(ax(2),'Ylabel'),'String','False Spring Exposure Index','FontSize',14)
+h_legend = legend('Green-up','Last Spring Freeze','FSEI')
+legend('boxoff')
+set(h_legend,'FontSize',12);
+title('Bioclimatic Changes Under RCP8.5','FontSize',16)
+
+
+
+% Check climatologies and tmin from MACA.
+load pullman_tmin_C
+
+% Convert to double.
+tmin_hst = double(tmin_hst);
+tmin_r45 = double(tmin_r45);
+tmin_r85 = double(tmin_r85);
+
+% Truncate data at 2099.
+tmin_r45 = tmin_r45(:,1:end-1);
+tmin_r85 = tmin_r85(:,1:end-1);
+
+% Create 150 year time-series.
+tmin_r45 = [tmin_hst,tmin_r45];
+tmin_r85 = [tmin_hst,tmin_r85];
+
+% Calculate annual tmins for JFMAM for years up to 2099.
+hst_ann_mean = squeeze(nanmean(tmin_hst(1:151,:),1));
+r45_ann_mean = squeeze(nanmean(tmin_r45(1:151,:),1));
+r85_ann_mean = squeeze(nanmean(tmin_r85(1:151,:),1));
+
+% Calculate climatological normal, take difference in annual tmins.
+hst_normal = squeeze(nanmean(hst_ann_mean,2));
+for i=1:150
+    r45_ann_anom(i,:) = r45_ann_mean(:,i) - hst_normal;
+    r85_ann_anom(i,:) = r85_ann_mean(:,i) - hst_normal;
+end
+
+% Plot timeseries for both absolutes and anomalies.
+years = 1950:2099;
+plot(years,r45_ann_anom)
+hold all
+plot(years,r85_ann_anom)
+title('Changes in Mean JFMAM Tmin 1950-2099')
+ylabel('Change in Degrees C')
+grid on
+legend('RCP4.5','RCP8.5','Location','Northwest')
+
+
+% Daily anomalies - calculate normals for JFMAM days, then take difference.
+daily_norm = squeeze(nanmean(tmin_hst(1:151,:),2));
+for i=1:150
+    r45_daily_anom(:,i) = tmin_r45(1:151,i) - daily_norm;
+    r85_daily_anom(:,i) = tmin_r85(1:151,i) - daily_norm;
+end
+
+% Find coldest 10% of days each year and take mean.
+for yr=1:150
+    f1 = find(r45_daily_anom(:,yr) <= prctile(r45_daily_anom(:,yr),10,1));
+    f2 = find(r85_daily_anom(:,yr) <= prctile(r85_daily_anom(:,yr),10,1));
+    r45_extremes_anom(yr) = nanmean(r45_daily_anom(f1,yr));
+    r85_extremes_anom(yr) = nanmean(r85_daily_anom(f2,yr));
+end
+
+plot(years,r45_extremes_anom)
+hold all
+plot(years,r85_extremes_anom)
+title('JFMAM Coldest 10% of Days Anomalies 1950-2099')
+xlabel('Year')
+ylabel('Anomalies (Degrees C)')
+grid on
+legend('RCP4.5','RCP8.5','Location','Northwest')
+
+scatter(r45_ann_anom,r45_extremes_anom)
+title('RCP4.5 JFMAM Tmin Means vs Extremes 2006-2099')
+xlabel('Mean Anomaly (Degrees C)')
+ylabel('Coldest 10% Anomaly (Degrees C)')
+
+scatter(r85_ann_anom,r85_extremes_anom)
+title('RCP8.5 JFMAM Tmin Means vs Extremes 2006-2099')
+xlabel('Mean Anomaly (Degrees C)')
+ylabel('Coldest 10% Anomaly (Degrees C)')
+
+
+% Difference between 2020-2049 and normal.
+r45_extremes_normal = squeeze(nanmean(r45_extremes_anom(1:56)));
+r85_extremes_normal = squeeze(nanmean(r85_extremes_anom(1:56)));
+
+r45_extremes_diff = r45_extremes_anom - r45_extremes_normal;
+r85_extremes_diff = r85_extremes_anom - r85_extremes_normal;
+
+plot(years(71:100),r45_extremes_diff)
+hold all
+plot(years(71:100),r85_extremes_diff)
+title('Anomalies in 10% Coldest Days')
+ylabel('Difference from 1950-2005 Historical (Degrees C)')
+legend('RCP45','RCP85','Location','Northwest')
+grid on
+
+
+
+
+% Look at USHCNv2 station data.
+load('../False_Springs_Observed/Data_USHCN_18482013.mat')
+load('../False_Springs_Observed/Data_StationInfo.mat')
+years = 1848:2013;
+find(years == 1950);
+find(years == 2005);
+tmin = tmindata(:,103:158,:);
+vpd = ones(size(tmin,1),size(tmin,2),size(tmin,3));
+
+% Daylight.
+for i=1:1218
+    daylit(i,:) = calcdaylength(1:366,lat(i));
+end
+daylit = repmat(daylit,[1 1 size(tmin,2)]);
+daylit = permute(daylit,[2 3 1]);
+
+% Find last spring freezes.
+for i=1:1218
+    for j=1:56
+        [lsf(j,i)] = findlsf(tmin(:,j,i),-2.2);
+    end
+end
+
+% GSI.
+for i=1:1218
+    gsiRaw(:,:,i) = calcgsi(tmin(:,:,i),daylit(:,:,i),vpd(:,:,i));
+end
+for i=1:1218
+    gsi(:,i) = findgsi(gsiRaw(:,:,i));
+end
+
+% FS
+for i=1:1218
+    for j=1:56
+        if isnan(lsf(j,i)) || isnan(gsi(j,i))
+            fs(j,i) = NaN;
+        elseif lsf(j,i) >= (7+gsi(j,i))
+            fs(j,i) = 1;
+        else
+            fs(j,i) = 0;
+        end
+    end
+end
+for i=1:1218
+    fs_sum(:,i) = sum(fs(:,i),1);
+    fsei(:,i) = (fs_sum(:,i) ./ sum(~isnan(lsf(:,i)),1)) * 100;
+end
+
+s_fs = fs;
+s_fs_sum = fs_sum;
+s_fsei = fsei;
+s_gsi = gsi;
+s_lat = lat;
+s_lon = lon;
+s_lsf = lsf;
+s_tmin = tmin;
+s_vpd = vpd;
+
+save('s_climatologies.mat','s_fs','s_fs_sum','s_fsei','s_gsi','s_lat',...
+     's_lon','s_lsf','s_tmin','s_vpd')
+
+% Find where stations and grid match; create variable with coordinate pairs,
+% iterate over stations and find where lat/lon match within specified distance.
+% If not found, input NaN.
+load('s_climatologies.mat','s_lat','s_lon')
+s_lat = s_lat';
+s_lon = s_lon';
+
+load('conus_grid.mat')
+m_lat = lat;
+m_lon = lon-360;
+
+clear lat lon
+
+stn_coords = [s_lon(:) s_lat(:)]
+for i=1:1218
+    p1 = find(m_lon >= stn_coords(i,1)-.03 & m_lon <= stn_coords(i,1)+.03);
+    p2 = find(m_lat >= stn_coords(i,2)-.03 & m_lat <= stn_coords(i,2)+.03);
+    if isempty(p1)
+        p1 = find(m_lon == max(m_lon));
+    elseif isempty(p2)
+        p2 = find(m_lat == min(m_lat));
+    end
+    p3(i,:) = [p1(1) p2(1)];
+end
+
+lat_ind = round(p3(:,2));
+lon_ind = round(p3(:,1));
+
+m_lat2 = m_lat(lat_ind,:);
+m_lon2 = m_lon(lon_ind,:);
+
+figure();scatter(m_lat2,s_lat)
+figure();scatter(m_lon2,s_lon)
+
+
+% Pull GSI/LS/FS based on coordinate pairs.
+file = matfile('gsi.mat');
+gsi = file.gsi_CONUS(:,:,:,6);
+gsi = double(gsi);
+clear file
+for i=1:1218
+    m_gsi(i,:) = gsi(1:56,lat_ind(i),lon_ind(i));
+end
+clear gsi
+
+file = matfile('lsf.mat');
+lsf = file.lsf_CONUS(:,:,:,6);
+lsf = double(lsf);
+clear file
+for i=1:1218
+    m_lsf(i,:) = lsf(1:56,lat_ind(i),lon_ind(i));
+end
+clear lsf
+
+for i=1:1218
+    m_fs(i,:) = fs(1:56,lat_ind(i),lon_ind(i));
+end
+for i=1:1218
+    fs_sum(:,i) = sum(m_fs(:,i),1);
+    m_fsei(:,i) = (fs_sum(:,i) ./ sum(~isnan(m_lsf(:,i)),1)) * 100;
+end
+
+
+
+save('m_climatologies.mat','m_gsi','m_lsf')
+
+% Create climatologies for comparison.
+load('s_climatologies.mat','s_gsi','s_lsf')
+load('m_climatologies.mat')
+gsi_mean(1,:) = nanmean(s_gsi,1);
+lsf_mean(1,:) = nanmean(s_lsf,1);
+gsi_mean(2,:) = nanmean(m_gsi,2)';
+lsf_mean(2,:) = nanmean(m_lsf,2)';
+
+gsi_mean(:,155) = NaN;
+lsf_mean(:,155) = NaN;
+
+% Calculate statistics.
+x1 = gsi_mean(1,:);
+y1 = gsi_mean(2,:);
+[gsi_r gsi_p] = corrcoef(x1,y1,'rows','pairwise')
+p1 = polyfit(x1(~isnan(x1)),y1(~isnan(y1)),1)
+yfit1 = polyval(p1,x1);
+tbl = table(gsi_mean(1,:)',gsi_mean(2,:)','VariableNames',{'Obs','Mdl'});
+mdl = fitlm(tbl)
+
+x2 = lsf_mean(1,:);
+y2 = lsf_mean(2,:);
+[lsf_r lsf_p] = corrcoef(x2,y2,'rows','pairwise')
+p2 = polyfit(x2(~isnan(x2)),y2(~isnan(y2)),1)
+yfit2 = polyval(p2,x2);
+tbl = table(lsf_mean(1,:)',lsf_mean(2,:)','VariableNames',{'Obs','Mdl'});
+mdl = fitlm(tbl)
+
+figure();
+subplot(2,2,1:2)
+plot(x1,y1,'+',x1,yfit1,'k','LineWidth',1.5)
+title('Observed vs. Modeled GSI')
+xlabel('Observed DoY'); ylabel('Modeled DoY')
+legend('GSI','Regression','Location','Northwest')
+grid on
+text(140,65,{'RMSE: 3.64'; 'R2: 0.966'})
+
+figure();
+subplot(2,2,1:2)
+plot(x2,y2,'+',x2,yfit2,'k','LineWidth',1.5)
+title('Observed vs. Modeled LSF')
+xlabel('Observed DoY'); ylabel('Modeled DoY')
+legend('LSF','Regression','Location','Northwest')
+grid on
+text(140,30,{'RMSE: 15.8'; 'R2: 0.752'})
+
+gsi_diff = gsi_mean(2,:) - gsi_mean(1,:);
+lsf_diff = lsf_mean(2,:) - lsf_mean(1,:);
+
+subplot(2,2,3)
+plot(s_lat,gsi_diff,'+')
+hold all
+plot(25:50,zeros(1,26),'k','LineWidth',1.5)
+title('Latitude vs. Difference between GSI')
+xlabel('Latitude'); ylabel('Difference (Days)')
+grid on
+
+subplot(2,2,3)
+plot(s_lat,lsf_diff,'+')
+hold all
+plot(25:50,zeros(1,26),'k','LineWidth',1.5)
+title('Latitude vs. Difference between LSF')
+xlabel('Latitude'); ylabel('Difference (Days)')
+grid on
+
+subplot(2,2,4)
+plot(s_lon,gsi_diff,'+')
+hold all
+plot(-130:-60,zeros(1,71),'k','LineWidth',1.5)
+title('Longitude vs. Difference between GSI')
+xlabel('Longitude'); ylabel('Difference (Days)')
+grid on
+
+subplot(2,2,4)
+plot(s_lon,lsf_diff,'+')
+hold all
+plot(-130:-60,zeros(1,71),'k','LineWidth',1.5)
+title('Longitude vs. Difference between GSI')
+xlabel('Longitude'); ylabel('Difference (Days)')
+grid on
+
+% Map relative change.
+data = gsi_diff;
+data_sig = ones(size(gsi_diff,1),size(gsi_diff,2));
+
+plotstationdata(data,data_sig,lat,lon,30,-30);
+title('Modeled GSI - Observed GSI')
+
+data = lsf_diff;
+
+
+x1 = s_fsei;
+y1 = m_fsei;
+[r p] = corrcoef(x1,y1,'rows','pairwise')
+p1 = polyfit(x1(~isnan(x1)),y1(~isnan(y1)),1)
+yfit1 = polyval(p1,x1);
+tbl = table(x1,y1,'VariableNames',{'Obs','Mdl'});
+mdl = fitlm(tbl)
+
+validdata1 = ~isnan(x1)
+validdata2 = ~isnan(y1)
+validdataBoth = validdata1 & validdata2
+keep1 = x1(validdataBoth) 
+keep2 = y1(validdataBoth) 
+
+p1 = polyfit(keep1, keep2, 1)
+yfit1 = polyval(p1,x1);
+tbl = table(x1',y1','VariableNames',{'Obs','Mdl'});
+mdl = fitlm(tbl)
+
+
+figure();
+subplot(2,2,1:2)
+plot(x1,y1,'+',x1,yfit1,'k','LineWidth',1.5)
+title('Observed vs. Modeled FSEI')
+xlabel('Observed %'); ylabel('Modeled %')
+legend('FSEI','Regression','Location','Northwest')
+grid on
+text(80,10,{'RMSE: 12.5'; 'R2: 0.645'})
+
+fsei_diff = m_fsei - s_fsei;
+
+subplot(2,2,3)
+plot(s_lat,fsei_diff,'+')
+hold all
+plot(25:50,zeros(1,26),'k','LineWidth',1.5)
+title('Latitude vs. Difference between FSEI')
+xlabel('Latitude'); ylabel('Difference (%)')
+grid on
+
+subplot(2,2,4)
+plot(s_lon,fsei_diff,'+')
+hold all
+plot(-130:-60,zeros(1,71),'k','LineWidth',1.5)
+title('Longitude vs. Difference between FSEI')
+xlabel('Longitude'); ylabel('Difference (%)')
+grid on
+
+
+data = fsei_diff;
+data_sig = ones(size(fsei_diff,1),size(fsei_diff,2));
+
+plotstationdata(data,data_sig,s_lat,s_lon,60,-60);
+title('Modeled FSEI - Observed FSEI')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
