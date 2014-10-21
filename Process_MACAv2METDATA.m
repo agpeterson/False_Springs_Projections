@@ -1,12 +1,12 @@
 %%=============================================================================
-% NAME:   Protoscript_v4.m
+% NAME:   Process_MACAv2METDATA.m
 % AUTHOR: Alexander Peterson
-% DATE:   21 Sept. 2014
-% DESCR:  This script contains prototype code to read through one
-%         MACAv2-METDATA model and calculate last spring freeze and GSI days.
+% DATE:   21 Oct. 2014
+% DESCR:  This script reads through all downscaled MACAv2-METDATA models and 
+%         calculates last spring freeze and green-up days.
 % IN:     MACAv2-METDATA
-% OUT:    N/A
-% CALLS:  findlsf.m
+% OUT:    gsi.mat; lsf.mat
+% CALLS:  findlsf.m; findspringevents.m; findgreenup.m; calcgsi.m
 %==============================================================================
 
 % Create model, experiment, and variable strings to be concatenated.
@@ -110,28 +110,22 @@ end
 
 % Create/load lsf and gsi matfiles. If lsf.mat and gsi.mat exist, create
 % matfile pointers, else create new matlab files and fill with NaNs.
-if exist('lsf.mat') == 2 && exist('gsi.mat') == 2
+lsf = matfile([WRITE_DIR,'lsf.mat'],'Writable',true);
+gsi = matfile([WRITE_DIR,'gsi.mat'],'Writable',true);
 
-    lsf = matfile([WRITE_DIR,'lsf.mat'],'Writable',true);
-    gsi = matfile([WRITE_DIR,'gsi.mat'],'Writable',true);
+% Preallocate space with NaNs.
+lsf.lsf_CONUS = NaN(N_YRS,N_LAT,N_LON,N_MDL,'single');
+gsi.gsi_CONUS = NaN(N_YRS,N_LAT,N_LON,N_MDL,'single');
 
-else
+% Add model names to matfiles.
+lsf.MDL_NAME = MDL_NAME;
+gsi.MDL_NAME = MDL_NAME;
 
-    % Preallocate space with NaNs.
-    lsf.lsf_CONUS = NaN(N_YRS,N_LAT,N_LON,N_MDL,'single');
-    gsi.gsi_CONUS = NaN(N_YRS,N_LAT,N_LON,N_MDL,'single');
-
-    % Add model names to matfiles.
-    lsf.MDL_NAME = MDL_NAME;
-    gsi.MDL_NAME = MDL_NAME;
-
-    % Add lat/lon to matfiles.
-    lsf.lat = lat;
-    lsf.lon = lon;
-    gsi.lat = lat;
-    gsi.lon = lon;
-
-end
+% Add lat/lon to matfiles.
+lsf.lat = lat;
+lsf.lon = lon - 360;
+gsi.lat = lat;
+gsi.lon = lon - 360;
 
 
 %%=============================================================================
@@ -142,11 +136,13 @@ end
 
 % Open parallel processor pool.
 if matlabpool('size') == 0
+
     matlabpool open local 12
+
 end
 
 % Model and experiment iteration; run prototype run on CNRM-CM5.
-m = 6   % for m=1:length(MDL_TARGET)
+for m=1:length(MDL_TARGET)
     
     % Subset model name using character array.
     model = char(MDL_NAME(MDL_TARGET(m)));
@@ -223,7 +219,7 @@ m = 6   % for m=1:length(MDL_TARGET)
                     t_var2 = t_var(:,:,:,i);
 
                     % Call parallel function.
-                    [lsf_sub,gsi_sub] = findfscomponents(t_var2,...
+                    [lsf_sub,gsi_sub] = findspringevents(t_var2,...
                                                          day_subset,...
                                                          vpd_subset);
                     
@@ -242,7 +238,7 @@ m = 6   % for m=1:length(MDL_TARGET)
 
             end     % y; LAT_START.
         end         % x; LON_START.
-    end            % e; Experiment loop.
+    end             % e; Experiment loop.
 end 		        % m; Model loop.
 
 matlabpool close;   % Close processor pool.

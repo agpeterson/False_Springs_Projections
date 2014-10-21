@@ -1,5 +1,5 @@
 %%=============================================================================
-% NAME:   plotfscomponents.m
+% NAME:   mapgriddata.m
 % AUTHOR: Alexander Peterson
 % DATE:   30 Sept. 2014
 % DESCR:  This script contains prototype code to plot the various components of
@@ -10,12 +10,11 @@
 %		  clbmap
 %==============================================================================
 
-function plotfscomponents(data,min_val,max_val,val_step,...
+function mapgriddata(data,min_val,max_val,val_step,lat,lon,...
 						  map_title,cb_type,cb_color,cb_units,cb_flip)
 
 % Add necessary paths and load data for plotting.
-load conus_grid
-load usahi
+load('usahi.mat')
 
 % Set variables for colorbar ticks and classes.
 cb_ticks = [min_val:val_step:max_val];

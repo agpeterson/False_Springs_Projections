@@ -1,5 +1,5 @@
 %%=============================================================================
-% NAME:   findgsi.m
+% NAME:   findgreenup.m
 % AUTHOR: Alexander Peterson
 % DATE:   16 Sept. 2014
 % DESCR:  This function processed raw daily GSI data.
@@ -8,7 +8,7 @@
 % CALLS:  moving_average.m
 %==============================================================================
 
-function [gsi] = findgsi(gsi_raw)
+function [gsi] = findgreenup(gsi_raw)
 
 % Create variables for number of years and latitude, and smoothing window.
 n_day = size(gsi_raw,1);

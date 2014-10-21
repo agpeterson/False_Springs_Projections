@@ -1,15 +1,15 @@
 %%=============================================================================
-% NAME:   findfscomponents.m
+% NAME:   findspringevents.m
 % AUTHOR: Alexander Peterson
 % DATE:   12 Sept. 2014
 % DESCR:  This function iterates in parallel over the MACA dataset to determine
 %		  last spring freeze and GSI.
 % IN:     Arrays t_var, day_subset, vpd_subset, n_yrs, lat_subset.
 % OUT:    Arrays lsf_sub and gsi_sub.
-% CALLS:  findlsf.m and calcgsi.m
+% CALLS:  findlsf.m; calcgsi.m; findgreenup.m
 %==============================================================================
 
-function [lsf_sub,gsi_sub] = findfscomponents(tmin,day_subset,vpd_subset);
+function [lsf_sub,gsi_sub] = findspringevents(tmin,day_subset,vpd_subset);
 
 % Create variables for number of years and latitude.
 n_day = size(tmin,1);
@@ -43,7 +43,7 @@ for i=1:n_lat
 		
 		% Call findgsi function and concatenate to sub-region.
 		t_gsi = gsi_raw(:,:,i);				% Create temporary variable for GSI.
-		gsi_sub(:,i) = findgsi(t_gsi);
+		gsi_sub(:,i) = findgreenup(t_gsi);
 
 	end 	% If statement.
 
