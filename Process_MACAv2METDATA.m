@@ -59,8 +59,8 @@ WRITE_DIR = '/home/alex/';
 % larger the regional subsets can be.
 LAT_START = [1 301];
 LAT_END = [300 585];
-LON_START = [1 301 601 901 1101];
-LON_END = [300 600 900 1100 1386];
+LON_START = [1 601];
+LON_END = [600 1386];
 
 % Create constant for number of years, lat, lon, and models.
 N_LAT = 585;
@@ -141,13 +141,14 @@ if matlabpool('size') == 0
 
 end
 
-% Model and experiment iteration; run prototype run on CNRM-CM5.
+% Model iteration.
 for m=1:length(MDL_TARGET)
     
     % Subset model name using character array.
     model = char(MDL_NAME(MDL_TARGET(m)));
         
-    for e = EXP_TARGET  % Possible break point?		
+    % Switch on experiment.
+    for e=1:length(FILE_SUFFIX)
         
         % Create path string for each file and set pointer to matfile.
         file_name = [PATH_PREFIX,FILE_PREFIX,model,char(FILE_SUFFIX(e))];
@@ -175,13 +176,13 @@ for m=1:length(MDL_TARGET)
         
             for y=1:length(LAT_START)
             
-                % Write lon cell, lat cell, experiment, and model to output.
+                % Write lat/lon cell, experiment, and model to output.
                 [x y e m]
     
                 % Break CONUS into regional lat, day, and vpd subsets.
                 lat_subset = [LAT_START(y):LAT_END(y)];
                 day_subset = day_length(:,lat_subset);
-                vpd_subset = ones(N_DAY,length(lat_subset));    % Temporary.
+                vpd_subset = ones(N_DAY,length(lat_subset));
 
                 % Create temporary variable to store daily and yearly data for
                 % each lat/lon subset.
@@ -207,8 +208,8 @@ for m=1:length(MDL_TARGET)
                 n_lon = length(lon_subset);
 
                 % Preallocate subset variables.
-                lsf_subset = NaN(n_yrs,n_lat,n_lon);
-                gsi_subset = NaN(n_yrs,n_lat,n_lon);
+                lsf_subset = NaN(n_yrs,n_lat,n_lon,'single');
+                gsi_subset = NaN(n_yrs,n_lat,n_lon,'single');
                 
                 tic
                 % Parallel iteration over lon_subset.
@@ -224,17 +225,15 @@ for m=1:length(MDL_TARGET)
                                                          vpd_subset);
                     
                     % Concatenate subregional variables to subset.
-                    lsf_subset(:,:,i) = lsf_sub;
-                    gsi_subset(:,:,i) = gsi_sub;
+                    lsf_subset(:,:,i) = single(lsf_sub);
+                    gsi_subset(:,:,i) = single(gsi_sub);
 
                 end     % i; lon_subset.
                 toc
 
                 % Write regional subsets together for all models.
-                lsf.lsf_CONUS(yr_index,lat_subset,lon_subset,m) = ...
-                                                            single(lsf_subset);
-                gsi.gsi_CONUS(yr_index,lat_subset,lon_subset,m) = ...
-                                                            single(gsi_subset);
+                lsf.lsf_CONUS(yr_index,lat_subset,lon_subset,m) = lsf_subset;
+                gsi.gsi_CONUS(yr_index,lat_subset,lon_subset,m) = gsi_subset;
 
             end     % y; LAT_START.
         end         % x; LON_START.

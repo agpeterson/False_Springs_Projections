@@ -5,7 +5,7 @@
 % DESCR:  This function processed raw daily GSI data.
 % IN:     Raw GSI values with array dimensions [DAYS,YEARS].
 % OUT:    
-% CALLS:  moving_average.m
+% CALLS:  movingaverage.m
 %==============================================================================
 
 function [gsi] = findgreenup(gsi_raw)
