@@ -140,30 +140,31 @@ mdl = fitlm(tbl)
 % Plot bivariate analysis.
 %==============================================================================
 % GSI
+subplot(3,1,1)
 plot(x1,y1,'b+',x1,yfit1,'k','LineWidth',1.5)
 title('Observed vs. Modeled GSI (1979-2009)')
 xlabel('Observed DoY'); ylabel('Modeled DoY')
-legend('Data','Regression','Location','Northwest')
+legend('Data','Regression','Location','Southeast')
 grid on
 axis([0 200 0 200])
 set(gca,'YTick',[0:50:200])
 text(5,150,{'R2: 0.997'; 'RMSE: 1.35'})
 
 % LSF
+subplot(3,1,2)
 plot(x2,y2,'b+',x2,yfit2,'k','LineWidth',1.5)
 title('Observed vs. Modeled LSF (1979-2009)')
 xlabel('Observed DoY'); ylabel('Modeled DoY')
-legend('Data','Regression','Location','Northwest')
 grid on
 axis([0 200 0 200])
 set(gca,'YTick',[0:50:200])
 text(5,150,{'R2: 0.986'; 'RMSE: 4.1'})
 
 % FSEI
+subplot(3,1,3)
 plot(x3,y3,'b+',x3,yfit3,'k','LineWidth',1.5)
 title('Observed vs. Modeled FSEI (1979-2009)')
 xlabel('Observed Percent'); ylabel('Modeled Percent')
-legend('Data','Regression','Location','Northwest')
 grid on
 text(3,75,{'R2: 0.719'; 'RMSE: 11.1'})
 
@@ -187,7 +188,7 @@ cb_type = 'div';
 cb_color = 'RdBu';
 cb_units = 'Number of Days';
 cb_flip = 'No Flip';
-mapgridded(data,-7,7,2,lat,lon,map_title,...
+mapgriddata(data,-7,7,2,lat,lon,map_title,...
     cb_type,cb_color,cb_units,cb_flip)
 
 % LSF
@@ -197,7 +198,7 @@ cb_type = 'div';
 cb_color = 'RdBu';
 cb_units = 'Number of Days';
 cb_flip = 'No Flip';
-mapgridded(data,-14,14,4,lat,lon,map_title,...
+mapgriddata(data,-14,14,4,lat,lon,map_title,...
     cb_type,cb_color,cb_units,cb_flip)
 
 % FSEI
@@ -207,6 +208,97 @@ cb_type = 'div';
 cb_color = 'RdBu';
 cb_units = 'Percent';
 cb_flip = 'No Flip';
-mapgridded(data,-50,50,10,lat,lon,map_title,...
+mapgriddata(data,-50,50,10,lat,lon,map_title,...
     cb_type,cb_color,cb_units,cb_flip)
+
+
+%%=============================================================================
+% Plot distributions.
+%==============================================================================
+% GSI.
+subaxis(3,2,1,'SH',0,'SV',0)
+histx(obs_gsi_mean_rshp)
+axis([0 200 0 15000])
+grid on
+set(gca,'XTickLabel',[],'YTick',[5000 10000])
+h = findobj(gca,'Type','patch');
+set(h,'FaceColor','b','EdgeColor','b')
+title('Observed (1979-2009)')
+ylabel('GSI')
+
+subaxis(3,2,2,'SH',0,'SV',0)
+histx(mdl_gsi_mean_rshp)
+axis([0 200 0 15000])
+grid on
+set(gca,'XTickLabel',[],'YTickLabel',[],'YTick',[5000 10000])
+h = findobj(gca,'Type','patch');
+set(h,'FaceColor','b','EdgeColor','b')
+title('Modeled (1979-2009)')
+
+% LSF.
+subaxis(3,2,3,'SH',0,'SV',0)
+histx(obs_lsf_mean_rshp(obs_lsf_mean_rshp < 181))
+axis([0 200 0 15000])
+grid on
+set(gca,'YTick',[5000 10000],'XTick',[50:50:150])
+h = findobj(gca,'Type','patch');
+set(h,'FaceColor','b','EdgeColor','b')
+ylabel('LSF'); xlabel('Day of Year')
+
+subaxis(3,2,4,'SH',0,'SV',0)
+histx(mdl_lsf_mean_rshp)
+axis([0 200 0 15000])
+grid on
+set(gca,'YTick',[5000 10000],'XTick',[50:50:150],'YTickLabel',[])
+h = findobj(gca,'Type','patch');
+set(h,'FaceColor','b','EdgeColor','b')
+xlabel('Day of Year')
+
+% FSEI.
+subaxis(3,2,5,'SH',0,'SV',0,'PT',0.06)
+histx(obs_fsei_rshp)
+axis([0 100 0 40000])
+grid on
+set(gca,'YTick',[10000:10000:30000],'YTickLabel',[10000:10000:30000],'XTick',[25:25:75])
+h = findobj(gca,'Type','patch');
+set(h,'FaceColor','b','EdgeColor','b')
+ylabel('FSEI'); xlabel('Percent of Years')
+
+subaxis(3,2,6,'SH',0,'SV',0,'PT',0.06)
+histx(mdl_fsei_rshp)
+axis([0 100 0 40000])
+grid on
+set(gca,'YTick',[10000:10000:30000],'YTickLabel',[],'XTick',[25:25:75])
+h = findobj(gca,'Type','patch');
+set(h,'FaceColor','b','EdgeColor','b')
+xlabel('Percent of Years')
+
+
+%% maybe a ttest2?
+
+
+for i=1:N_LON
+    for j=1:N_LAT
+        [H(j,i),P(j,i)] = ttest2(obs_gsi(:,j,i),mdl_gsi(:,j,i));
+    end
+end
+
+load Data/conus_grid
+lon = lon - 360;
+
+% GSI
+data = P;
+map_title = 'TTest2 GSI';
+cb_type = 'seq';
+cb_color = 'Blues';
+cb_units = 'Significance';
+cb_flip = 'No Flip';
+mapgriddata(data,0,1,.1,lat,lon,map_title,...
+    cb_type,cb_color,cb_units,cb_flip)
+
+
+
+
+
+
 
