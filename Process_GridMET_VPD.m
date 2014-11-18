@@ -11,8 +11,8 @@
 % larger the regional subsets can be.
 LAT_START = [1 301];
 LAT_END = [300 585];
-LON_START = [1 301 601 901 1101];
-LON_END = [300 600 900 1100 1386];
+LON_START = [1 601 1101];
+LON_END = [600 1100 1386];
 
 % Create constant for number of years, lat, lon, and models.
 N_LAT = 585;
@@ -42,6 +42,10 @@ gu = matfile('/home/alex/gridMET_vpd_gu.mat','Writable',true);
 lsf.lsf_CONUS = NaN(N_YRS,N_LAT,N_LON,'single');
 gu.gu_CONUS = NaN(N_YRS,N_LAT,N_LON,'single');
 
+% Save lat and lon.
+lat = tmin.lat;
+lon = tmin.lon - 360;
+
 
 %%=============================================================================
 % Pressure.
@@ -63,7 +67,6 @@ pres = pres';
 %==============================================================================
 
 % Calculate photoperiod on tmin lat.
-% lat = tmin.lat;
 % for i=1:N_LAT
 %     day_length(:,i) = calcDayLength(DAY_IND,lat(i));
 % end
@@ -146,8 +149,8 @@ for x=1:length(LON_START)
         toc
 
         % Write regional subsets to file.
-        lsf.lsf_CONUS(yr_index,lat_subset,lon_subset) = lsf_subset;
-        gu.gu_CONUS(yr_index,lat_subset,lon_subset) = gu_subset;
+        lsf.lsf_CONUS(YR_IND,lat_subset,lon_subset) = lsf_subset;
+        gu.gu_CONUS(YR_IND,lat_subset,lon_subset) = gu_subset;
 
     end             % y; LAT_START.
 end                 % x; LON_START.

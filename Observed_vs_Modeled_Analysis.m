@@ -302,3 +302,91 @@ mapgriddata(data,0,1,.1,lat,lon,map_title,...
 
 
 
+%% New 
+file = matfile('gridMET_gsi.mat');
+gu = double(file.gsi_CONUS);
+
+file = matfile('gridMET_vpd_gu.mat');
+gu_vpd = double(file.gu_CONUS);
+
+load('~/Dropbox/Workspace/ACSL/gridMET_Coords.mat')
+
+% Climo.
+gu_mean = squeeze(nanmean(gu,1));
+gu_vpd_mean = squeeze(nanmean(gu_vpd,1));
+
+% Map.
+prj = 'Albers Equal-Area Conic';
+map_title = 'Non-VPD Mean Green-up (1979-2012)'
+cb_type = 'seq';
+cb_color = 'Reds';
+cb_units = 'Day of Year';
+cb_flip = 'No Flip';
+figure();
+mapGriddedData(gu_mean,prj,1,180,20,lat,lon,2,2,map_title,cb_type,cb_color,...
+    cb_units,cb_flip)
+
+
+map_title = 'VPD Mean Green-up (1979-2012)';
+mapGriddedData(gu_vpd_mean,prj,1,180,20,lat,lon,2,2,map_title,cb_type,cb_color,...
+    cb_units,cb_flip)
+
+
+% ttest
+[h,p] = ttest2(gu,gu_vpd);
+h = squeeze(h);
+p = squeeze(p);
+
+% Look at LSF.
+file = matfile('gridMET_lsf.mat')
+lsf = double(file.lsf_CONUS);
+
+file = matfile('gridMET_vpd_lsf.mat')
+lsf_vpd = double(file.lsf_CONUS);
+
+% climo.
+lsf_mean = squeeze(nanmean(lsf,1));
+lsf_vpd_mean = squeeze(nanmean(lsf_vpd,1));
+
+
+% Look at models - check for missing region.
+mapGriddedData(lsf_mean,prj,1,180,20,lat,lon,2,2,map_title,cb_type,cb_color,...
+    cb_units,cb_flip)
+
+
+% models
+PATH = '/media/alexander/Vault/gsi_'
+MDL_NAME = {'bcc-csm1-1';...
+            'bcc-csm1-1-m';...
+            'BNU-ESM';...
+            'CanESM2';...
+            'CCSM4';...
+            'CNRM-CM5';...
+            'CSIRO-Mk3-6-0';...
+            'GFDL-ESM2G';...
+            'GFDL-ESM2M';...
+            'HadGEM2-CC365';...
+            'HadGEM2-ES365';...
+            'inmcm4';...
+            'IPSL-CM5A-LR';...
+            'IPSL-CM5A-MR';...
+            'IPSL-CM5B-LR';...
+            'MIROC5';...
+            'MIROC-ESM-CHEM';...
+            'MIROC-ESM';...
+            'MRI-CGCM3';...
+            'NorESM1-M'};
+
+
+m = matfile([PATH MDL_NAME{1}])
+mdl1_gsi = m.gsi_CONUS;
+
+lat2 = m.lat;
+lon2 = m.lon;
+mapGriddedData(squeeze(mdl1_gsi(50,:,:)),prj,1,180,20,lat2,lon2,2,2,map_title,cb_type,cb_color,...
+    cb_units,cb_flip)
+
+
+
+
+
