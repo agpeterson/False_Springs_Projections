@@ -6,6 +6,21 @@
 % tmin @ metdata_tmin_19792012_CONUS.mat
 % sph @ metdata_sph_19792012_CONUS.mat
 %==============================================================================
+%%=============================================================================
+% NAME:   Process_GRIDMET.m
+% AUTHOR: Alexander Peterson
+% DATE:   15 Nov. 2014
+%
+% DESCR:  This script processes the GridMET 1979-2012 data to find last spring
+%         freezes and green-up.
+% REF:    N/A
+%
+% IN:     metdata_tmin_19792012_CONUS.mat
+%         metdata_tmax_19792012_CONUS.mat
+%         metdata_sph_19792012_CONUS.mat
+% OUT:    gridMET_vpd_gu.mat
+% CALLS:  findSpringEvents.m (GridMET VPD specific)
+%==============================================================================
 
 % Break CONUS grid into regional subsets. The more powerful the machine, the
 % larger the regional subsets can be.
@@ -35,11 +50,9 @@ tmin = matfile('/storage/OBSDATA/METDATA/metdata_tmin_19792012_CONUS.mat')
 tmax = matfile('/storage/OBSDATA/METDATA/metdata_tmax_19792012_CONUS.mat')
 
 % Create files to store lsf and gsi.
-lsf = matfile('/home/alex/gridMET_vpd_lsf.mat','Writable',true);
 gu = matfile('/home/alex/gridMET_vpd_gu.mat','Writable',true);
 
 % Preallocate space with NaNs.
-lsf.lsf_CONUS = NaN(N_YRS,N_LAT,N_LON,'single');
 gu.gu_CONUS = NaN(N_YRS,N_LAT,N_LON,'single');
 
 % Save lat and lon.
@@ -115,7 +128,6 @@ for x=1:length(LON_START)
         n_lat = length(lat_subset);
 
         % Preallocate subset variables.
-        lsf_subset = NaN(N_YRS,n_lat,n_lon,'single');
         gu_subset = NaN(N_YRS,n_lat,n_lon,'single');
 
         % Break pressure and day length into regional subset.
@@ -133,23 +145,20 @@ for x=1:length(LON_START)
         parfor lon=1:n_lon
 
             % Call parallel function.
-            [lsf_sub,gu_sub] = findSpringEventsVPD(...
-                                            t_tmin(:,:,:,lon),...
-                                            t_tmax(:,:,:,lon),...
-                                            t_sph(:,:,:,lon),...
-                                            pres_subset(:,lon),...
-                                            dayl_subset(:,:),...
-                                            N_DAYS,N_YRS,n_lat,1);
+            [gu_sub] = findSpringEventsVPD(t_tmin(:,:,:,lon),...
+                                           t_tmax(:,:,:,lon),...
+                                           t_sph(:,:,:,lon),...
+                                           pres_subset(:,lon),...
+                                           dayl_subset(:,:),...
+                                           N_DAYS,N_YRS,n_lat,1);
 
             % Concatenate subregional variables to subset.
-            lsf_subset(:,:,lon) = lsf_sub;
             gu_subset(:,:,lon) = gu_sub;
 
         end     % parfor - lon; n_lon.
         toc
 
         % Write regional subsets to file.
-        lsf.lsf_CONUS(YR_IND,lat_subset,lon_subset) = lsf_subset;
         gu.gu_CONUS(YR_IND,lat_subset,lon_subset) = gu_subset;
 
     end             % y; LAT_START.

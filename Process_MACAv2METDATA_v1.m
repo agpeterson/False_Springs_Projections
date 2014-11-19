@@ -2,11 +2,14 @@
 % NAME:   Process_MACAv2METDATA.m
 % AUTHOR: Alexander Peterson
 % DATE:   21 Oct. 2014
+%
 % DESCR:  This script reads through all downscaled MACAv2-METDATA models and 
 %         calculates last spring freeze and green-up days.
+% REF:    N/A
+%
 % IN:     MACAv2-METDATA
 % OUT:    gsi.mat; lsf.mat
-% CALLS:  findlsf.m; findspringevents.m; findgreenup.m; calcgsi.m
+% CALLS:  findspringevents.m (MACA specific)
 %==============================================================================
 
 % Create model, experiment, and variable strings to be concatenated.

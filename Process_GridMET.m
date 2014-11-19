@@ -2,11 +2,14 @@
 % NAME:   Process_GRIDMET.m
 % AUTHOR: Alexander Peterson
 % DATE:   15 Nov. 2014
-% DESCR:  This script processes the GRIDMET data on Thunder to find last spring
+%
+% DESCR:  This script processes the GridMET 1979-2012 data to find last spring
 %         freezes and green-up.
-% IN:     GRIDMET
-% OUT:    N/A
-% CALLS:  
+% REF:    N/A
+%
+% IN:     metdata_tmin_19792012_CONUS.mat
+% OUT:    gridMET_lsf.mat; gridMET_gsi.mat
+% CALLS:  findSpringEvents.m (GridMET specific)
 %==============================================================================
 
 % Break CONUS grid into regional subsets. The more powerful the machine, the
