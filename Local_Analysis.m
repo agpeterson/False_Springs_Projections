@@ -164,7 +164,7 @@ end
 
 
 %%=============================================================================
-% Create NCA regions.
+% Create NCA regions and means.
 %==============================================================================
 
 % Write grid points to file.
@@ -191,6 +191,84 @@ se_coords = dlmread('Southeast.txt',',', 2, 1);
 % Create cell array for regional averages.
 region_lat = {nw_lat sw_lat gp_lat mw_lat ne_lat se_lat};
 region_lon = {nw_lon sw_lon gp_lon mw_lon ne_lon se_lon};
+
+
+%%=============================================================================
+% Figure 1 boxplots - historical region means.
+%==============================================================================
+
+% Create regional and multi-model historical means.
+for i=1:3
+
+	% Switch cases on i to extract lat, lon, and mdl for variables.
+	switch i,
+		case 1, data = double(squeeze(gu_file.clm_mean(1,:,:,:)));
+		case 2, data = double(squeeze(lsf_file.clm_mean(1,:,:,:)));
+		case 3, data = double(squeeze(fsei_file.clm_mean(1,:,:,:)));
+	end
+
+	% Iterate over regions to derive regional means.
+	for j=1:length(region_lat)
+
+		% Index into data and extract region; reshape to array.
+		data_rgn = data(region_lat{j},region_lon{j},:);
+
+		% Set size variables.
+		lat_size = size(data_rgn,1);
+		lon_size = size(data_rgn,2);
+
+		% Reshape vector to matrix.
+		data_rshp = reshape(data_rgn,[lat_size*lon_size 20]);
+
+		% Average over the region.
+		rgn_mean(:,j,i) = nanmean(data_rshp,1)';
+		
+	end 	% k; 1:length(region_lat)
+
+end 	% i; 1:3
+
+% Multi-model mean.
+rgn_mdl_mean = squeeze(nanmean(rgn_mean,1));
+
+% Plot regional historic means for GU, LSF, and FSEI.
+num_cats = 6;	% 6 regions.
+num_subcats = 1;
+x_labels = {'NW' 'SW' 'GP' 'MW' 'NE' 'SE'};
+jitter = .5;
+colors = {'DarkSlateGray' 'DarkGray' 'DarkSlateGray' 'DarkGray'};
+
+for i=1:3
+	
+	% Create figures and squeeze data to be plotted.
+	figure('Position',[100 100 1000 618])
+	data = squeeze(rgn_mean(:,:,i));
+	plotNotBoxPlot(data,num_cats,num_subcats,x_labels,jitter,colors)
+	
+	% Set y-axis limits.
+	if i < 3
+		set(gca,'YLim',[50 150],...
+			'YTick',(70:20:130),...
+			'YTickLabel',(70:20:130))
+		legend('Mean','SEM','Model')
+	else
+		set(gca,'YLim',[0 100],...
+			'YTick',(20:20:80),...
+			'YTickLabel',(20:20:80))
+		legend('Mean','SEM','Model')
+	end
+
+end
+
+% Write output to table.
+row_name = {'NW' 'SW' 'GP' 'MW' 'NE' 'SE'};
+summary_table = array2table(rgn_mdl_mean,...
+	'VariableNames',{'GU','LSF','FSEI'},'RowNames',row_name)
+writetable(summary_table,'Hst_Means','Delimiter',',','WriteRowNames',true)
+
+
+%%=============================================================================
+% Figure 3 boxplots - regional future means.
+%==============================================================================
 
 % Preallocate variables.
 rgn_mean = NaN(20,6,5,3);
@@ -236,14 +314,68 @@ end 	% i; 1:3
 % Multi-model mean.
 rgn_mdl_mean = squeeze(nanmean(rgn_mean,1));
 
-% Plot test region (NW) using plotNotBoxPlot().
-num_cats = 2;
+% Plot regional historic means for GU, LSF, and FSEI.
+num_cats = 6;	% 6 regions.
 num_subcats = 2;
-x_labels = {'2020-2059' '2060-2099'};
+x_labels = {'NW' 'SW' 'GP' 'MW' 'NE' 'SE'};
+jitter = .6;
+colors = {'DarkRed' 'IndianRed' 'DarkBlue' 'SteelBlue'};
 
-data = squeeze(rgn_mean(:,1,2:end,1)); % All models, NW, futures, GU.
+% Create figures and squeeze data to be plotted.
+figure('Position',[100 100 1000 618])
+x = 1;
+y = 2;
+for i=1:3
 
-plotNotBoxPlot(data,num_cats,num_subcats,x_labels)
+	% Pull data; reshape to matrix, then rearrange rows.
+	data = squeeze(rgn_mean(:,:,[2:5],i));
 
+	data_1 = data(:,:,[1 3]);
+	data_1 = reshape(data_1,[20 12]);
+	data_1 = data_1(:,[1 7 2 8 3 9 4 10 5 11 6 12]);
 
+	data_2 = data(:,:,[2 4]);
+	data_2 = reshape(data_2,[20 12]);
+	data_2 = data_2(:,[1 7 2 8 3 9 4 10 5 11 6 12]);
 
+	% Plot
+	subaxis(3,2,x,'SpacingHorizontal',0,'SpacingVertical',0);
+	plotNotBoxPlot(data_1,num_cats,num_subcats,x_labels,jitter,colors)
+	set(gca,'YLim',[-80 20],...
+		'YTick',(-60:20:0),...
+		'YTickLabel',(-60:20:0))
+
+	if x == 1
+		title('2020-2059')
+		ylabel('Delta Days')
+	elseif x == 3
+		ylabel('Delta Days')
+	elseif x == 5
+		ylabel('Delta %')
+	end		
+
+	subaxis(3,2,y,'SpacingHorizontal',0,'SpacingVertical',0);
+	plotNotBoxPlot(data_2,num_cats,num_subcats,x_labels,jitter,colors)
+	set(gca,'YLim',[-80 20],...
+		'YTick',(-60:20:0),...
+		'YTickLabel',[])
+
+	if y == 2
+		title('2060-2099')
+	end
+
+	x = x + 2;
+	y = y + 2;
+	
+end 	% i; 1:3
+
+% Write output to table.
+row_name = {'NW' 'SW' 'GP' 'MW' 'NE' 'SE'};
+table_name = {'GU' 'LSF' 'FSEI'};
+for i=1:3
+	summary_table = array2table(squeeze(rgn_mdl_mean(:,2:5,i)),...
+		'VariableNames',{'R45_Fut1','R45_Fut2','R85_Fut1','R85_Fut2'},...
+		'RowNames',row_name)
+	writetable(summary_table,['Fut_' table_name{i}],...
+		'Delimiter',',','WriteRowNames',true)
+end
