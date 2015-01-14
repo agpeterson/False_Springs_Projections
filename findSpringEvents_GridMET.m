@@ -26,9 +26,12 @@
 %==============================================================================
 
 
-function [lsf_sub,gu_sub] = findSpringEventsVPD(tmin,photoperiod,vpd,...
-												N_DAYS,N_YRS,...
-												N_LAT,SCN);
+function [lsf_sub,gu_sub] = findSpringEvents(tmin,tmin_delta,...
+	photoperiod,vpd,N_DAYS,N_YRS,N_LAT,SCN);
+
+% Uncomment if using VPD in GSI.
+% function [gu_sub] = findSpringEventsVPD(tmin,tmax,sph,pres,photoperiod,...
+%	N_DAYS,N_YRS,N_LAT,SCN);
 
 
 %%=============================================================================
@@ -36,14 +39,25 @@ function [lsf_sub,gu_sub] = findSpringEventsVPD(tmin,photoperiod,vpd,...
 %==============================================================================
 % Preallocate arrays for LSF and GSI geographical subsets.
 lsf_sub = NaN(N_YRS,N_LAT,'single');
-gsi_sub = NaN(N_YRS,N_LAT,'single');
-gsi_max = NaN(N_LAT,'single');
+gsi_raw = NaN(N_DAYS,N_YRS,'single');
+gu_sub = NaN(N_YRS,N_LAT,'single');
+gsi_max = NaN(N_LAT,1,'single');
+
 
 % Convert from Kelvin to C and cast inputs as doubles.
 tmin = double(tmin - 273.15);
 
+% Uncomment if using VPD in GSI.
+% tmax = double(tmax - 273.15);
+% sph = double(sph);
+
 % Set LSF threshold.
 THRESHOLD = single(-2.2);
+
+% Modify temperatures for sensitivity experiment.
+for lat=1:N_LAT
+	tmin_mod(:,:,lat) = tmin(:,:,lat) + tmin_delta(lat,:);
+end
 
 
 %%=============================================================================
@@ -53,7 +67,7 @@ THRESHOLD = single(-2.2);
 for lat=1:N_LAT
 
 	% Find non-empty latitudes.
-	f = find(~isnan(tmin(:,:,lat)));
+	f = find(~isnan(tmin_mod(:,:,lat)));
 	
 	% If tmin is not empty, iterate over years.
 	if ~isempty(f)
@@ -61,10 +75,16 @@ for lat=1:N_LAT
 		for yr=1:N_YRS
 
 			% Call LSF function.
-			lsf_sub(yr,lat) = findLSF(tmin(:,yr,lat),THRESHOLD);
+			lsf_sub(yr,lat) = findLSF(tmin_mod(:,yr,lat),THRESHOLD);
+
+			% Call dew point function - uncomment if using VPD in GSI.
+            % tdew = calcDewPoint(sph(:,yr,lat),pres(lat));
+
+            % Call VPD function - uncomment if using VPD in GSI.
+            % vpd = calcVPD(tmax(:,yr,lat),tmin(:,yr,lat),tdew,pres(lat));
 
 			% Call calcGSI.m function.
-			gsi_raw(:,yr) = calcGSI(tmin(:,yr,lat),photoperiod(:,lat),vpd);
+			gsi_raw(:,yr) = calcGSI(tmin_mod(:,yr,lat),photoperiod(:,lat),vpd);
 	    	
 	    end 	% yr; N_YRS.
 		
@@ -74,9 +94,6 @@ for lat=1:N_LAT
 	
 	end 	% If statement.
 end         % lat; lat_subset.
-
-
-
 
 
 end 		% Function.

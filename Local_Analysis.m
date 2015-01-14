@@ -101,18 +101,18 @@ lon = lon - 360;
 
 
 %%=============================================================================
-% Create historical climatology maps.
+% Map all models.
 %==============================================================================
 
 % Map historical means.
 for i=1:N_MDL
-	data = squeeze(gu_file.clm_mean(1,:,:,i));
+	data = squeeze(fsei_file.clm_mean(5,:,:,i));
 
 	% Initialize variables.
 	prj = 'Albers Equal-Area Conic';
-	min_val = 1;
-	max_val = 181;
-	val_step = 20;
+	min_val = 0;
+	max_val = 100;
+	val_step = 10;
 	lat_buffer = 2;
 	lon_buffer = 2;
 	cb_units = 'Day of Year';
@@ -121,7 +121,37 @@ for i=1:N_MDL
 	cb_flip = 'No Flip';
 
 	% Change map_title and data variables then run.
-	map_title = [MODEL{i} ' Mean GU 1950-2005'];
+	map_title = [MODEL{i} ' FSEI 1950-2005'];
+	figure('Position',[100 100 1000 618]);
+	mapGriddedData(data,prj,min_val,max_val,val_step,...
+	               lat,lon,lat_buffer,lon_buffer,...
+	               map_title,cb_type,cb_color,cb_units,cb_flip)
+end
+
+
+%%=============================================================================
+% Map all models.
+%==============================================================================
+
+% Map historical means.
+for i=1:N_CLM
+	data = squeeze(fsei_file.clm_mean(i,:,:,:));
+	data = nanmean(double(data),3);
+
+	% Initialize variables.
+	prj = 'Albers Equal-Area Conic';
+	min_val = 0;
+	max_val = 100;
+	val_step = 10;
+	lat_buffer = 2;
+	lon_buffer = 2;
+	cb_units = 'Percent of Years';
+	cb_type = 'seq';
+	cb_color = 'Blues';
+	cb_flip = 'No Flip';
+
+	% Change map_title and data variables then run.
+	map_title = ['FSEI 1950-2005'];
 	figure('Position',[100 100 1000 618]);
 	mapGriddedData(data,prj,min_val,max_val,val_step,...
 	               lat,lon,lat_buffer,lon_buffer,...
@@ -134,28 +164,28 @@ end
 %==============================================================================
 
 % Map climatological means.
-clm = {'1950-2005' '2020-2059 RCP4.5' '2060-2099 RCP4.5' ...
-	   '2020-2059 RCP8.5' '2060-2099 RCP8.5'};
+clm = {'1950-2005' '2040-2069 RCP4.5' '2070-2099 RCP4.5' ...
+	   '2040-2069 RCP8.5' '2070-2099 RCP8.5'};
 for i=1:N_CLM
 
 	% Load data.
-	data = squeeze(file.clm_diff(i,:,:,:));
+	data = squeeze(fsei_file.clm_diff(i,:,:,:));
 	data = nanmean(double(data),3);
 
 	% Initialize variables.
 	prj = 'Albers Equal-Area Conic';
-	min_val = -50;
-	max_val = 50;
-	val_step = 20;
+	min_val = -45;
+	max_val = 0;
+	val_step = 5;
 	lat_buffer = 2;
 	lon_buffer = 2;
-	cb_units = 'Relative Difference (Percent)';
-	cb_type = 'div';
-	cb_color = 'RdBu';
-	cb_flip = 'No Flip';
+	cb_units = 'Difference from Historic (Days)';
+	cb_type = 'seq';	%div
+	cb_color = 'Reds';	%RdBu
+	cb_flip = 'Flip';	% No Flip for FSEI
 
 	% Change map_title and data variables then run.
-	map_title = ['Difference in FSEI ' clm{i}];
+	map_title = ['Change in GU ' clm{i}];
 	figure('Position',[100 100 1000 618]);
 	mapGriddedData(data,prj,min_val,max_val,val_step,...
 	               lat,lon,lat_buffer,lon_buffer,...
@@ -167,215 +197,268 @@ end
 % Create NCA regions and means.
 %==============================================================================
 
-% Write grid points to file.
+% Create grid points.
 [x,y] = meshgrid(lon,lat);
 grid_points = [x(:) y(:)];
+
+% Write to csv file.
 dlmwrite('MACA_Coords.csv',grid_points,'precision','%.6f');
 
-% Load regional MACA coords.
-nw_coords = dlmread('Northwest.txt',',', 2, 1);
-sw_coords = dlmread('Southwest.txt',',', 2, 1);
-gp_coords = dlmread('GreatPlains.txt',',', 2, 1);
-mw_coords = dlmread('Midwest.txt',',', 2, 1);
-ne_coords = dlmread('Northeast.txt',',', 2, 1);
-se_coords = dlmread('Southeast.txt',',', 2, 1);
+% Get all ecoregion text files in directory.
+files = dir('../Data/Ecoregions_MACA/*.txt');
+files = strvcat(files.name);
 
-% Find regional coord indices.
-[nw_lat,nw_lon] = findLatLonIndices(nw_coords,lat,lon);
-[sw_lat,sw_lon] = findLatLonIndices(sw_coords,lat,lon);
-[gp_lat,gp_lon] = findLatLonIndices(gp_coords,lat,lon);
-[mw_lat,mw_lon] = findLatLonIndices(mw_coords,lat,lon);
-[ne_lat,ne_lon] = findLatLonIndices(ne_coords,lat,lon);
-[se_lat,se_lon] = findLatLonIndices(se_coords,lat,lon);
+lon_grid = x;
+lat_grid = y;
 
-% Create cell array for regional averages.
-region_lat = {nw_lat sw_lat gp_lat mw_lat ne_lat se_lat};
-region_lon = {nw_lon sw_lon gp_lon mw_lon ne_lon se_lon};
+% Start local parallel pool.
+gcp()
+
+% Preallocate rgn_grid.
+rgn_mask = NaN(585,1386,size(files,1));
+
+% Call parallel function to strip files of whitespace, open file, and create
+% index grid by calling findLatLonIndices() function (RENAME).
+parfor i=1:size(files,1)
+	file_name = strtrim(files(i,:));
+	disp(file_name);
+	rgn_coords = dlmread(file_name,',');
+	rgn_mask(:,:,i) = createRegionMask(rgn_coords,lon_grid,lat_grid);
+end
+
+% test to see output.
+load rgn_mask
+tst = data;
+tst(rgn_mask(:,:,1)==0) = NaN;
+
+% Want to make blocks to be plotted, e.g., 1s for region 1, 2s for 2, etc...
+eco_grid = NaN(585,1386,'single');
+for i=1:19
+	eco_grid(rgn_mask(:,:,i)==1) = i;
+end
+figure('Position',[100 100 1000 618]);
+mapGriddedData(eco_grid,prj,1,19,1,lat,lon,lat_buffer,lon_buffer,...
+	'CONUS Ecoregions','qual','Accent','Divison','No Flip')
+
+% Print out one region historic GU.
+data = squeeze(gu_file.clm_mean(1,:,:,:));
+data = nanmean(double(data),3);
+tst_grid = NaN(585,1386,'single');
+for i=1:19
+	tst = data;
+	tst(rgn_mask(:,:,i)==0) = NaN;
+	tst_mean = nanmean(reshape(tst,[585*1386 1]),1);
+	tst_grid(rgn_mask(:,:,i)==1) = tst_mean;
+	clear tst tst_mean
+end
+figure('Position',[100 100 1000 618]);
+mapGriddedData(tst_grid,prj,1,181,20,lat,lon,lat_buffer,lon_buffer,...
+	'Ecoregion Mean GU 1950-2005','seq','Blues','Day of Year','No Flip')
 
 
 %%=============================================================================
-% Figure 1 boxplots - historical region means.
+% Model spread boxplots.
 %==============================================================================
 
-% Create regional and multi-model historical means.
+% Create ecoregion means for all models.
 for i=1:3
 
 	% Switch cases on i to extract lat, lon, and mdl for variables.
-	switch i,
-		case 1, data = double(squeeze(gu_file.clm_mean(1,:,:,:)));
-		case 2, data = double(squeeze(lsf_file.clm_mean(1,:,:,:)));
-		case 3, data = double(squeeze(fsei_file.clm_mean(1,:,:,:)));
-	end
+    switch i,
+        case 1, data = double(squeeze(gu_file.clm_diff(5,:,:,:)));
+        case 2, data = double(squeeze(lsf_file.clm_diff(5,:,:,:)));
+        case 3, data = double(squeeze(fsei_file.clm_diff(5,:,:,:)));
+    end
 
-	% Iterate over regions to derive regional means.
-	for j=1:length(region_lat)
+	% Iterate over models and ecoregions, creating a temporary copy of model
+	% data to mask over. Mean over mask and store.
+	for j=1:20
 
-		% Index into data and extract region; reshape to array.
-		data_rgn = data(region_lat{j},region_lon{j},:);
+		for k=1:19
+			tmp = squeeze(data(:,:,j));
+			tmp(rgn_mask(:,:,k)==0) = NaN;
+			rgn_mean(k,j,i) = nanmean(reshape(tmp,[585*1386 1]),1);
+		end
 
-		% Set size variables.
-		lat_size = size(data_rgn,1);
-		lon_size = size(data_rgn,2);
-
-		% Reshape vector to matrix.
-		data_rshp = reshape(data_rgn,[lat_size*lon_size 20]);
-
-		% Average over the region.
-		rgn_mean(:,j,i) = nanmean(data_rshp,1)';
-		
-	end 	% k; 1:length(region_lat)
-
-end 	% i; 1:3
-
-% Multi-model mean.
-rgn_mdl_mean = squeeze(nanmean(rgn_mean,1));
-
-% Plot regional historic means for GU, LSF, and FSEI.
-num_cats = 6;	% 6 regions.
-num_subcats = 1;
-x_labels = {'NW' 'SW' 'GP' 'MW' 'NE' 'SE'};
-jitter = .5;
-colors = {'DarkSlateGray' 'DarkGray' 'DarkSlateGray' 'DarkGray'};
-
-for i=1:3
-	
-	% Create figures and squeeze data to be plotted.
-	figure('Position',[100 100 1000 618])
-	data = squeeze(rgn_mean(:,:,i));
-	plotNotBoxPlot(data,num_cats,num_subcats,x_labels,jitter,colors)
-	
-	% Set y-axis limits.
-	if i < 3
-		set(gca,'YLim',[50 150],...
-			'YTick',(70:20:130),...
-			'YTickLabel',(70:20:130))
-		legend('Mean','SEM','Model')
-	else
-		set(gca,'YLim',[0 100],...
-			'YTick',(20:20:80),...
-			'YTickLabel',(20:20:80))
-		legend('Mean','SEM','Model')
 	end
 
 end
 
+% Print statistics.
+for i=1:19
+	mdl_max(i,:) = squeeze(max(rgn_mean(i,:,:)));
+	mdl_mean(i,:) = squeeze(mean(rgn_mean(i,:,:)));
+	mdl_min(i,:) = squeeze(min(rgn_mean(i,:,:)));
+end
+stats = [mdl_max,mdl_mean,mdl_min];
+
 % Write output to table.
-row_name = {'NW' 'SW' 'GP' 'MW' 'NE' 'SE'};
-summary_table = array2table(rgn_mdl_mean,...
-	'VariableNames',{'GU','LSF','FSEI'},'RowNames',row_name)
-writetable(summary_table,'Hst_Means','Delimiter',',','WriteRowNames',true)
+row_names = {'HotContinentalDivision'...
+			 'HotContinentalRegimeMountains'...
+			 'MarineDivision'...
+			 'MarineRegimeMountains'...
+			 'MediterraneanDivision'...
+			 'MediterraneanRegimeMountains'...
+			 'PrairieDivision'...
+			 'SavannaDivision'...
+			 'SubtropicalDivision'...
+			 'SubtropicalRegimeMountains'...
+			 'TemperateDesertDivision'...
+			 'TemperateDesertRegimeMountains'...
+			 'TemperateSteppeDivision'...
+			 'TemperateSteppeRegimeMountains'...
+			 'TropicalSubtropicalDesertDivision'...
+			 'TropicalSubtropicalRegimeMountains'...
+			 'TropicalSubtropicalSteppeDivision'...
+			 'WarmContinentalDivision'...
+			 'WarmContinentalRegimeMountains'};
+var_names = {'GU_max'...
+			 'LSF_max'...
+			 'FSEI_max'...
+			 'GU_mean'...
+			 'LSF_mean'...
+			 'FSEI_mean'...
+			 'GU_min'...
+			 'LSF_min'...
+			 'FSEI_min'};
+summary_table = array2table(stats,'VariableNames',var_names,...
+	'RowNames',row_names)
+writetable(summary_table,'Fut2_R85_Stats','Delimiter',',','WriteRowNames',true)
+	data = squeeze(fsei_file.clm_mean(5,:,:,i));
 
 
 %%=============================================================================
-% Figure 3 boxplots - regional future means.
+% Sensitivity experiments.
 %==============================================================================
 
-% Preallocate variables.
-rgn_mean = NaN(20,6,5,3);
-rgn_mdl_mean = NaN(6,5,3);
+% Look at delta tmin.
+tmin_file = matfile('/media/alexander/Vault/Bioclimate/MACA_Tmin.mat')
 
-% Create regional and multi-model means.
-for i=1:3
-
-	% Switch cases on i to extract lat, lon, and mdl for variables.
-	switch i,
-		case 1, data = double(squeeze(gu_file.clm_diff(:,:,:,:)));
-		case 2, data = double(squeeze(lsf_file.clm_diff(:,:,:,:)));
-		case 3, data = double(squeeze(fsei_file.clm_diff(:,:,:,:)));
-	end
-
-	% Iterate over climatologies.
-	for j=1:N_CLM
-
-		% Extract anomalies.
-		data_clm = squeeze(data(j,:,:,:));
-
-		% Iterate over regions to derive regional means.
-		for k=1:length(region_lat)
-
-			% Index into data and extract region; reshape to array.
-			data_rgn = data_clm(region_lat{k},region_lon{k},:);
-
-			% Set size variables.
-			lat_size = size(data_rgn,1);
-			lon_size = size(data_rgn,2);
-
-			% Reshape vector to matrix.
-			data_rshp = reshape(data_rgn,[lat_size*lon_size 20]);
-
-			% Average over the region.
-			rgn_mean(:,k,j,i) = nanmean(data_rshp,1)';
-		
-		end 	% k; 1:length(region_lat)
-
-	end 	% j; 1:N_CLM
-end 	% i; 1:3
-
-% Multi-model mean.
-rgn_mdl_mean = squeeze(nanmean(rgn_mean,1));
-
-% Plot regional historic means for GU, LSF, and FSEI.
-num_cats = 6;	% 6 regions.
-num_subcats = 2;
-x_labels = {'NW' 'SW' 'GP' 'MW' 'NE' 'SE'};
-jitter = .6;
-colors = {'DarkRed' 'IndianRed' 'DarkBlue' 'SteelBlue'};
-
-% Create figures and squeeze data to be plotted.
-figure('Position',[100 100 1000 618])
-x = 1;
-y = 2;
-for i=1:3
-
-	% Pull data; reshape to matrix, then rearrange rows.
-	data = squeeze(rgn_mean(:,:,[2:5],i));
-
-	data_1 = data(:,:,[1 3]);
-	data_1 = reshape(data_1,[20 12]);
-	data_1 = data_1(:,[1 7 2 8 3 9 4 10 5 11 6 12]);
-
-	data_2 = data(:,:,[2 4]);
-	data_2 = reshape(data_2,[20 12]);
-	data_2 = data_2(:,[1 7 2 8 3 9 4 10 5 11 6 12]);
-
-	% Plot
-	subaxis(3,2,x,'SpacingHorizontal',0,'SpacingVertical',0);
-	plotNotBoxPlot(data_1,num_cats,num_subcats,x_labels,jitter,colors)
-	set(gca,'YLim',[-80 20],...
-		'YTick',(-60:20:0),...
-		'YTickLabel',(-60:20:0))
-
-	if x == 1
-		title('2020-2059')
-		ylabel('Delta Days')
-	elseif x == 3
-		ylabel('Delta Days')
-	elseif x == 5
-		ylabel('Delta %')
-	end		
-
-	subaxis(3,2,y,'SpacingHorizontal',0,'SpacingVertical',0);
-	plotNotBoxPlot(data_2,num_cats,num_subcats,x_labels,jitter,colors)
-	set(gca,'YLim',[-80 20],...
-		'YTick',(-60:20:0),...
-		'YTickLabel',[])
-
-	if y == 2
-		title('2060-2099')
-	end
-
-	x = x + 2;
-	y = y + 2;
-	
-end 	% i; 1:3
-
-% Write output to table.
-row_name = {'NW' 'SW' 'GP' 'MW' 'NE' 'SE'};
-table_name = {'GU' 'LSF' 'FSEI'};
-for i=1:3
-	summary_table = array2table(squeeze(rgn_mdl_mean(:,2:5,i)),...
-		'VariableNames',{'R45_Fut1','R45_Fut2','R85_Fut1','R85_Fut2'},...
-		'RowNames',row_name)
-	writetable(summary_table,['Fut_' table_name{i}],...
-		'Delimiter',',','WriteRowNames',true)
+% Calculate delta.
+for i=1:20
+	tmin_hst = tmin_file.data(:,:,1,i) - 273.15;
+	tmin_fut = tmin_file.data(:,:,3,i) - 273.15;
+	tmin_delta(:,:,i) = tmin_fut - tmin_hst;
 end
+
+for i=1:20
+	figure();
+	histx(reshape(tmin_delta(:,:,i),[585*1386 1]))
+end
+
+% Calculate multi-model mean tmin delta.
+tmin_mdl_delta = squeeze(nanmean(tmin_delta,3));
+
+% Load data.
+gu_sen_file = matfile('/media/alexander/Vault/Bioclimate/GU_Sensitivity.mat')
+gu_obs_file = matfile('/media/alexander/Vault/Bioclimate/GU_GridMET.mat')
+
+lsf_sen_file = matfile('/media/alexander/Vault/Bioclimate/LSF_Sensitivity.mat')
+lsf_obs_file = matfile('/media/alexander/Vault/Bioclimate/LSF_GridMET.mat')
+
+% Take difference between climatological observed and sensitivity values.
+gu_sen_mean = squeeze(nanmean(gu_sen_file.gu_CONUS,1));
+gu_obs_mean = squeeze(nanmean(gu_obs_file.gu_CONUS,1));
+gu_sen_delta = gu_sen_mean - gu_obs_mean;
+
+lsf_sen_mean = squeeze(nanmean(lsf_sen_file.lsf_CONUS,1));
+lsf_obs_mean = squeeze(nanmean(lsf_obs_file.lsf_CONUS,1));
+lsf_sen_delta = lsf_sen_mean - lsf_obs_mean;
+
+% Flip GridMET lats.
+gu_sen_delta = flipud(gu_sen_delta);
+lsf_sen_delta = flipud(lsf_sen_delta);
+
+% Plot differences.
+prj = 'Albers Equal-Area Conic';
+min_val = -45;
+max_val = 0;
+val_step = 5;
+lat_buffer = 2;
+lon_buffer = 2;
+cb_units = 'Difference (Days)';
+cb_type = 'seq';
+cb_color = 'Reds';
+cb_flip = 'Flip';
+
+map_title = 'Delta Mean LSF Date 1979-2012 (Sens.Exp.-Obs.)';
+data = lsf_sen_delta;
+figure('Position',[100 100 1000 618]);
+mapGriddedData(data,prj,min_val,max_val,val_step,...
+               lat,lon,lat_buffer,lon_buffer,...
+               map_title,cb_type,cb_color,cb_units,cb_flip)
+
+% Compare differences.
+gu_fut_file = matfile('/media/alexander/Vault/Bioclimate/GU.mat')
+lsf_fut_file = matfile('/media/alexander/Vault/Bioclimate/LSF.mat')
+
+gu_clm_diff = squeeze(gu_fut_file.clm_diff(4,:,:,:));
+gu_mdl_delta = squeeze(nanmean(gu_clm_diff,3));
+
+lsf_clm_diff = squeeze(lsf_fut_file.clm_diff(4,:,:,:));
+lsf_mdl_delta = squeeze(nanmean(lsf_clm_diff,3));
+
+% Calculate correlations.
+[r,p] = corrcoef(gu_sen_delta,gu_mdl_delta,'rows','pairwise')
+[r,p] = corrcoef(lsf_sen_delta,lsf_mdl_delta,'rows','pairwise')
+
+% Plot.
+subplot(1,2,1)
+scatter(reshape(gu_sen_delta,[585*1386 1]),reshape(gu_mdl_delta,[585*1386 1]),'+')
+axis([-90 10 -90 10])
+hold all
+h = refline(1,0)
+set(h,'Color','k','LineWidth',1.5)
+set(gca,'XTick',[-80:20:0],...
+	'XTickLabel',[-80:20:0],...
+	'YTick',[-80:20:0],...
+	'YTickLabel',[-80:20:0])
+title('Delta GU RCP8.5 vs Sensitivity')
+xlabel('Difference b/w Sens. & Obs.')
+ylabel('Difference b/w Fut. & Hst.')
+box on; grid on
+text(-30,-70,{'Pearsons r: 0.9496'; 'p-value: 0'})
+legend('Data','1:1 Reference Line','Location','Northwest')
+
+subplot(1,2,2)
+scatter(reshape(lsf_sen_delta,[585*1386 1]),reshape(lsf_mdl_delta,[585*1386 1]),'+')
+axis([-90 10 -90 10])
+hold all
+h = refline(1,0)
+set(h,'Color','k','LineWidth',1.5)
+set(gca,'XTick',[-80:20:0],...
+	'XTickLabel',[-80:20:0],...
+	'YTick',[-80:20:0],...
+	'YTickLabel',[-80:20:0])
+title('Delta LSF RCP8.5 vs Sensitivity')
+xlabel('Difference b/w Sens. & Obs.')
+ylabel('Difference b/w Fut. & Hst.')
+box on; grid on
+text(-30,-70,{'Pearsons r: 0.8662'; 'p-value: 0'})
+
+% Differences in the differences.
+gu_deltas = gu_mdl_delta - gu_sen_delta;
+lsf_deltas = lsf_mdl_delta - lsf_sen_delta;
+
+% Plot differences.
+prj = 'Albers Equal-Area Conic';
+min_val = -15;
+max_val = 15;
+val_step = 3;
+lat_buffer = 2;
+lon_buffer = 2;
+cb_units = 'Difference (Days)';
+cb_type = 'div';
+cb_color = 'RdBu';
+cb_flip = 'No Flip';
+
+map_title = 'Differences in GU Deltas (MACA - GridMET)';
+data = gu_deltas;
+figure('Position',[100 100 1000 618]);
+mapGriddedData(data,prj,min_val,max_val,val_step,...
+               lat,lon,lat_buffer,lon_buffer,...
+               map_title,cb_type,cb_color,cb_units,cb_flip)
+
+
+
+

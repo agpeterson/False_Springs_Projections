@@ -19,7 +19,6 @@
 
 % Path suffix and prefix strings to be concatenated for model access.
 PATH_PREFIX = 'False_Springs_Data/';	% Thunder
-%PATH_PREFIX = '/media/alexander/Vault/Bioclimate/';	% Local
 VARIABLE = {'gu_';...
 			'lsf_'};
 MODEL = {'bcc-csm1-1';...
@@ -51,10 +50,10 @@ YEARS = [1950:2005 2006:2099 2006:2099];
 hst_start = 1950;
 hst_end = 2005;
 
-fut1_start = 2020;
-fut1_end = 2059;
+fut1_start = 2040;
+fut1_end = 2069;
 
-fut2_start = 2060;
+fut2_start = 2070;
 fut2_end = 2099;
 
 % Find start and end indices.
@@ -278,4 +277,29 @@ for i=1:N_MDL
 	fsei_file.clm_chng(:,:,:,i) = single(fsei_chng);
 
 end 	% i; 1:N_MDL
+
+
+%%=============================================================================
+% Explore driving changes in GU.
+%==============================================================================
+
+% Load data into memory.
+load('MACA_Tmin.mat');
+
+% Convert from K to C.
+data = data - 273.15;
+
+% Create variables for historic and future periods.
+tmin_hst = squeeze(data(:,:,1,:));
+tmin_fut = squeeze(data(:,:,3,:));
+
+% Take difference for delta.
+tmin_delta = tmin_fut - tmin_hst;
+
+% Create multi-model mean delta C.
+tmin_mdl_delta = squeeze(nanmean(tmin_delta,3));
+
+% Save delta to be used in sensitivity experiment.
+save('tmin_delta.mat','tmin_mdl_delta')
+
 

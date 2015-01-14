@@ -16,17 +16,18 @@
 % larger the regional subsets can be.
 LAT_START = [1];
 LAT_END = [585];
-LON_START = [1 601 1101];
-LON_END = [600 1100 1386];
+LON_START = [1 701];
+LON_END = [700 1386];
 
 % Create constant for number of years, lat, lon, and models.
 N_LAT = 585;
 N_LON = 1386;
-N_YRS = 34;
+N_YRS = 30;
 N_DAYS = 181;
+N_MDL = 20;
 
 % Create time indices.
-YR_IND = 1:34;
+YR_IND = 2:31;
 DAY_IND = 1:181;
 
 
@@ -35,24 +36,28 @@ DAY_IND = 1:181;
 %==============================================================================
 
 % Open GridMET matfiles.
-tmin = matfile('/storage/OBSDATA/METDATA/metdata_tmin_19792012_CONUS.mat')
+disp('Accessing METDATA file...')
+tmin_file = matfile('/storage/OBSDATA/METDATA/metdata_tmin_19792012_CONUS.mat')
 
 % Create files to store lsf and gsi.
-lsf = matfile('/home/alex/gridMET_lsf.mat','Writable',true);
-gu = matfile('/home/alex/gridMET_gu.mat','Writable',true);
+disp('Creating and preallocating GU and LSF files...')
+lsf_file = matfile('/home/alex/LSF_Sensitivity.mat','Writable',true);
+gu_file = matfile('/home/alex/GU_Sensitivity.mat','Writable',true);
 
 % Preallocate space with NaNs.
-lsf.lsf_CONUS = NaN(N_YRS,N_LAT,N_LON,'single');
-gu.gu_CONUS = NaN(N_YRS,N_LAT,N_LON,'single');
+lsf_file.data = NaN(N_YRS,N_LAT,N_LON,N_MDL,'single');
+gu_file.data = NaN(N_YRS,N_LAT,N_LON,N_MDL,'single');
 
-% Save lat and lon.
-lat = tmin.lat;
-lon = tmin.lon - 360;
-
+% Load tmin deltas for sensitivity experiment.
+disp('Accessing and loading MACA tmin deltas...')
+tmin_delta_file = matfile('Tmin_Deltas.mat');
+tmin_deltas = squeeze(tmin_delta_file.data(:,:,3,:));
 
 %%=============================================================================
 % GSI constants.
 %==============================================================================
+
+disp('Creating day length and VPD variables...')
 
 % Calculate photoperiod on tmin lat.
 % for i=1:N_LAT
@@ -61,13 +66,14 @@ lon = tmin.lon - 360;
 % save('day_length.mat','day_length')
 
 % Open day_length data.
-load('day_length.mat')
+load('Day_Length_GridMET.mat')
+day_length = day_length(DAY_IND,:);
 
 % Find where photoperiod is greater than or less than bounds and normalize; 
 % all values below bounds set to 0 and all values above bounds set to 1.
 HOUR_LOW = 10;
 HOUR_HIGH = 11;
-day_length = day_length(DAY_INDEX,:);
+day_length = day_length(DAY_IND,:);
 dayl = NaN(size(day_length)); 
 f = find(day_length > HOUR_LOW & day_length < HOUR_HIGH);
 dayl(f) = day_length(f) - HOUR_LOW;
@@ -85,13 +91,13 @@ vpd = single(1.0 - (1.0 - VPD_LOW) / (VPD_HIGH-VPD_LOW));
 %==============================================================================
 
 % Open parallel processor pool.
+disp('Opening parallel processor pool...')
 if matlabpool('size') == 0
-
     matlabpool open local 12
-
 end
 
 % Iterate through regions.
+disp('Entering main loop...')
 for x=1:length(LON_START)
         
     % Break CONUS into regional lon subset.
@@ -101,7 +107,7 @@ for x=1:length(LON_START)
     for y=1:length(LAT_START)
 
         % Write lon and lat cell to output.
-        [x y]
+        disp({'\tLon: ',x; '\tLat: ',y})
     
         % Break CONUS into regional lat subsets.
         lat_subset = [LAT_START(y):LAT_END(y)];
@@ -115,30 +121,46 @@ for x=1:length(LON_START)
         dayl_subset = dayl(:,lat_subset);
 
         % Create temporary variable to store daily and yearly data for
-        % each lat/lon subset.
-        t_tmin = tmin.data(DAY_IND,:,lat_subset,lon_subset);
+        % each lat/lon subset. Replace -9999 (missing values) with NaN.
+        disp('\tLoading temperature data...')
+        t_tmin = tmin_file.data(DAY_IND,YR_IND,lat_subset,lon_subset);
+        t_tmin(t_tmin == -9999) = NaN;
 
-        % Parallel iteration over lon_subset.
-        tic
-        parfor lon=1:n_lon
+        % Model loop.
+        disp('\tEntering model loop...')
+        for mdl=1:N_MDL
 
-            % Call parallel function.
-            [lsf_sub,gu_sub] = findSpringEvents(t_tmin(:,:,:,lon),...
-                                            	dayl_subset(:,:),vpd,...
-                                            	N_DAYS,N_YRS,n_lat,1);
+            % Extract tmin deltas for lat/lon subsets.
+            t_delta = squeeze(tmin_deltas(lat_subset,lon_subset,mdl));
 
-            % Concatenate subregional variables to subset.
-            lsf_subset(:,:,lon) = lsf_sub;
-            gu_subset(:,:,lon) = gu_sub;
+            % Parallel iteration over lon_subset.
+            tic
+            disp('\tEntering parallel loop...')
+            parfor lon=1:n_lon
 
-        end     % parfor - lon; n_lon.
-        toc
+                % Call parallel function.
+                [lsf_sub,gu_sub] = findSpringEvents(t_tmin(:,:,:,lon),...
+                                                    t_delta(:,lon),...
+                                                	dayl_subset(:,:),...
+                                                    vpd,N_DAYS,N_YRS,n_lat,1);
 
-        % Write regional subsets to file.
-        lsf.lsf_CONUS(YR_IND,lat_subset,lon_subset) = lsf_subset;
-        gu.gu_CONUS(YR_IND,lat_subset,lon_subset) = gu_subset;
+                % Concatenate subregional variables to subset.
+                lsf_subset(:,:,lon) = lsf_sub;
+                gu_subset(:,:,lon) = gu_sub;
 
-    end             % y; LAT_START.
-end                 % x; LON_START.
+            end     % parfor - lon; n_lon.
+            toc
 
-matlabpool close;   % Close processor pool.
+            % Write regional subsets to file.
+            disp('\tWriting output to file...')
+            lsf_file.data(1:30,lat_subset,lon_subset,mdl) = lsf_subset;
+            gu_file.data(1:30,lat_subset,lon_subset,mdl) = gu_subset;
+
+        end     % mdl; 1:N_MDL
+
+    end         % y; LAT_START.
+end             % x; LON_START.
+
+% Close parallel pool and program.
+matlabpool close;
+exit
