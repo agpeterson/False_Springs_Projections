@@ -197,6 +197,9 @@ end
 % Create NCA regions and means.
 %==============================================================================
 
+% Load MACA grid.
+load MACA_Coords
+
 % Create grid points.
 [x,y] = meshgrid(lon,lat);
 grid_points = [x(:) y(:)];
@@ -208,257 +211,206 @@ dlmwrite('MACA_Coords.csv',grid_points,'precision','%.6f');
 files = dir('../Data/Ecoregions_MACA/*.txt');
 files = strvcat(files.name);
 
+% Create lon/lat grids.
 lon_grid = x;
 lat_grid = y;
 
-% Start local parallel pool.
-gcp()
-
 % Preallocate rgn_grid.
-rgn_mask = NaN(585,1386,size(files,1));
+ecorgn_masks = NaN(585,1386,size(files,1));
 
-% Call parallel function to strip files of whitespace, open file, and create
-% index grid by calling findLatLonIndices() function (RENAME).
-parfor i=1:size(files,1)
+% Strip files of whitespace, open file, and create index grid by calling 
+% createRegionMask() function.
+for i=1:size(files,1)
 	file_name = strtrim(files(i,:));
 	disp(file_name);
-	rgn_coords = dlmread(file_name,',');
-	rgn_mask(:,:,i) = createRegionMask(rgn_coords,lon_grid,lat_grid);
+	ecorgn_coords = dlmread(file_name,',');
+	ecorgn_masks(:,:,i) = createRegionMask(ecorgn_coords,lon_grid,lat_grid);
 end
-
-% test to see output.
-load rgn_mask
-tst = data;
-tst(rgn_mask(:,:,1)==0) = NaN;
+save('Ecoregion_Masks.mat','ecorgn_mask')
 
 % Want to make blocks to be plotted, e.g., 1s for region 1, 2s for 2, etc...
-eco_grid = NaN(585,1386,'single');
+ecorgn_grid = NaN(585,1386,'single');
 for i=1:19
-	eco_grid(rgn_mask(:,:,i)==1) = i;
+	ecorgn_grid(ecorgn_masks(:,:,i)==1) = i;
 end
-figure('Position',[100 100 1000 618]);
-mapGriddedData(eco_grid,prj,1,19,1,lat,lon,lat_buffer,lon_buffer,...
-	'CONUS Ecoregions','qual','Accent','Divison','No Flip')
 
-% Print out one region historic GU.
-data = squeeze(gu_file.clm_mean(1,:,:,:));
-data = nanmean(double(data),3);
-tst_grid = NaN(585,1386,'single');
-for i=1:19
-	tst = data;
-	tst(rgn_mask(:,:,i)==0) = NaN;
-	tst_mean = nanmean(reshape(tst,[585*1386 1]),1);
-	tst_grid(rgn_mask(:,:,i)==1) = tst_mean;
-	clear tst tst_mean
-end
+% Plot.
+prj = 'Albers Equal-Area Conic';
+min_val = 1;
+max_val = 20;
+val_step = 1;
+lat_buffer = 2;
+lon_buffer = 2;
+cb_units = 'Ecoregion Divison';
+cb_type = 'qual';	%div
+cb_color = 'Set1';	%RdBu
+cb_flip = 'No Flip';	% No Flip for FSEI
+
+map_title = 'CONUS Ecoregion Divisons'
 figure('Position',[100 100 1000 618]);
-mapGriddedData(tst_grid,prj,1,181,20,lat,lon,lat_buffer,lon_buffer,...
-	'Ecoregion Mean GU 1950-2005','seq','Blues','Day of Year','No Flip')
+mapGriddedData(ecorgn_grid,prj,min_val,max_val,val_step,...
+	            lat,lon,lat_buffer,lon_buffer,...
+	            map_title,cb_type,cb_color,cb_units,cb_flip)
+
+% Map ecoregion changes.
+gu = squeeze(gu_file.clm_diff(4,:,:,:));
+gu_mean = nanmean(double(gu),3);
+conus_grid = NaN(585,1386,'single');
+for i=1:19
+	ecorgn_gu = gu_mean;
+	ecorgn_gu(ecorgn_masks(:,:,i)==0) = NaN;
+	ecorgn_mean = nanmean(reshape(ecorgn_gu,[585*1386 1]),1);
+	conus_grid(ecorgn_masks(:,:,i)==1) = ecorgn_mean;
+	clear ecorgn_gu ecorgn_mean
+end
+
+% Plot.
+prj = 'Albers Equal-Area Conic';
+min_val = -21;
+max_val = 0;
+val_step = 3;
+lat_buffer = 2;
+lon_buffer = 2;
+cb_units = 'Difference (Days)';
+cb_type = 'seq';	%div
+cb_color = 'Reds';	%RdBu
+cb_flip = 'Flip';	% No Flip for FSEI
+
+map_title = 'Ecoregion Delta GU RCP8.5 2040-2069'
+figure('Position',[100 100 1000 618]);
+mapGriddedData(conus_grid,prj,min_val,max_val,val_step,...
+	            lat,lon,lat_buffer,lon_buffer,...
+	            map_title,cb_type,cb_color,cb_units,cb_flip)
 
 
 %%=============================================================================
 % Model spread boxplots.
 %==============================================================================
 
+% Load ecoregion masks.
+load Ecoregion_Masks
+
 % Create ecoregion means for all models.
 for i=1:3
 
 	% Switch cases on i to extract lat, lon, and mdl for variables.
     switch i,
-        case 1, data = double(squeeze(gu_file.clm_diff(5,:,:,:)));
-        case 2, data = double(squeeze(lsf_file.clm_diff(5,:,:,:)));
-        case 3, data = double(squeeze(fsei_file.clm_diff(5,:,:,:)));
+        case 1, data = double(squeeze(gu_file.clm_diff(4,:,:,:)));
+        case 2, data = double(squeeze(lsf_file.clm_diff(4,:,:,:)));
+        case 3, data = double(squeeze(fsei_file.clm_diff(4,:,:,:)));
     end
 
 	% Iterate over models and ecoregions, creating a temporary copy of model
-	% data to mask over. Mean over mask and store.
+	% data to mask over. Average over mask and hold.
 	for j=1:20
-
 		for k=1:19
 			tmp = squeeze(data(:,:,j));
-			tmp(rgn_mask(:,:,k)==0) = NaN;
-			rgn_mean(k,j,i) = nanmean(reshape(tmp,[585*1386 1]),1);
+			tmp(ecorgn_masks(:,:,k)==0) = NaN;
+			ecorgn_mean(k,j,i) = nanmean(reshape(tmp,[585*1386 1]),1);
 		end
-
 	end
 
 end
 
-% Print statistics.
-for i=1:19
-	mdl_max(i,:) = squeeze(max(rgn_mean(i,:,:)));
-	mdl_mean(i,:) = squeeze(mean(rgn_mean(i,:,:)));
-	mdl_min(i,:) = squeeze(min(rgn_mean(i,:,:)));
+% Set plotting variables.
+symbols = {'o','o','o','o','o',...
+		   's','s','s','s','s',...
+		   'd','d','d','d','d',...
+		   'p','p','p','p','p'};
+mdl_colors = {'Purple','Red','Yellow','Green','Blue',...
+			  'Purple','Red','Yellow','Green','Blue',...
+			  'Purple','Red','Yellow','Green','Blue',...
+			  'Purple','Red','Yellow','Green','Blue'};
+ecorgn_names = {'Hot Cont.'...
+				'Hot Cont. Mts.'...
+				'Marine'...
+				'Marine Mts.'...
+				'Mediter.'...
+				'Mediter. Mts.'...
+				'Prairie'...
+				'Savanna'...
+				'Subtrop.'...
+				'Subtrop. Mts.'...
+				'Temper. Desert'...
+				'Temper. Desert Mts.'...
+				'Temper. Steppe'...
+				'Temper. Steppe Mts.'...
+				'Tropic. Subtrop. Desert'...
+				'Tropic. Subtrop. Mts'...
+				'Tropic. Subtrop. Steppe'...
+				'Warm Cont.'...
+				'Warm Cont. Mts.'};
+
+% Create figure by calling subplot() and notBoxPlot3().
+figure();
+
+% GU
+subaxis(1,3,1,'SpacingHoriz',0);
+h = notBoxPlot3(ecorgn_mean(:,:,1)',[],0.3,'patch',symbols,mdl_colors);  % was 0.6
+for k=1:19
+    set(h(k).mu,'Color',rgb('Black'));
+    set(h(k).semPtch,'FaceColor',rgb('DarkGray'));
+    set(h(k).sdPtch,'FaceColor',rgb('DimGray'));
 end
-stats = [mdl_max,mdl_mean,mdl_min];
+view(90,-90)	% Flip axes such that y is horizontal and x is vertical.
+set(gca,'XDir','Reverse')	% Reverse the x-axis order.
+set(gca,'YLim',[-50 50],...
+		'YTick',(-40:20:40),...
+		'YTickLabel',(-40:20:40),...
+		'FontSize',10)
+set(gca,'XTick',(1:19),'XTickLabel',ecorgn_names,'FontSize',10)
+ylabel('Change (Days)','FontSize',12)
+title('Delta GU 2040-2069')
+grid off;
+box on;
+hold on;
 
-% Write output to table.
-row_names = {'HotContinentalDivision'...
-			 'HotContinentalRegimeMountains'...
-			 'MarineDivision'...
-			 'MarineRegimeMountains'...
-			 'MediterraneanDivision'...
-			 'MediterraneanRegimeMountains'...
-			 'PrairieDivision'...
-			 'SavannaDivision'...
-			 'SubtropicalDivision'...
-			 'SubtropicalRegimeMountains'...
-			 'TemperateDesertDivision'...
-			 'TemperateDesertRegimeMountains'...
-			 'TemperateSteppeDivision'...
-			 'TemperateSteppeRegimeMountains'...
-			 'TropicalSubtropicalDesertDivision'...
-			 'TropicalSubtropicalRegimeMountains'...
-			 'TropicalSubtropicalSteppeDivision'...
-			 'WarmContinentalDivision'...
-			 'WarmContinentalRegimeMountains'};
-var_names = {'GU_max'...
-			 'LSF_max'...
-			 'FSEI_max'...
-			 'GU_mean'...
-			 'LSF_mean'...
-			 'FSEI_mean'...
-			 'GU_min'...
-			 'LSF_min'...
-			 'FSEI_min'};
-summary_table = array2table(stats,'VariableNames',var_names,...
-	'RowNames',row_names)
-writetable(summary_table,'Fut2_R85_Stats','Delimiter',',','WriteRowNames',true)
-	data = squeeze(fsei_file.clm_mean(5,:,:,i));
-
-
-%%=============================================================================
-% Sensitivity experiments.
-%==============================================================================
-
-% Look at delta tmin.
-tmin_file = matfile('/media/alexander/Vault/Bioclimate/MACA_Tmin.mat')
-
-% Calculate delta.
+% Model names.
 for i=1:20
-	tmin_hst = tmin_file.data(:,:,1,i) - 273.15;
-	tmin_fut = tmin_file.data(:,:,3,i) - 273.15;
-	tmin_delta(:,:,i) = tmin_fut - tmin_hst;
+    plot(9.25+(i*.5),15,symbols{i},...
+    	'MarkerFaceColor',rgb(mdl_colors{i}),...
+        'MarkerEdgeColor',rgb('Black'));
+    hold on
+    text(9.25+(i*.5),17,MODEL{i},'fontsize',10);
 end
 
-for i=1:20
-	figure();
-	histx(reshape(tmin_delta(:,:,i),[585*1386 1]))
+% LSF
+subaxis(1,3,2,'SpacingHoriz',0);
+h = notBoxPlot3(ecorgn_mean(:,:,2)',[],0.3,'patch',symbols,mdl_colors);  % was 0.6
+for k=1:19
+    set(h(k).mu,'Color',rgb('Black'));
+    set(h(k).semPtch,'FaceColor',rgb('DarkGray'));
+    set(h(k).sdPtch,'FaceColor',rgb('DimGray'));
 end
+view(90,-90)	% Flip axes such that y is horizontal and x is vertical.
+set(gca,'XDir','Reverse')	% Reverse the x-axis order.
+set(gca,'YLim',[-50 50],...
+		'YTick',(-40:20:40),...
+		'YTickLabel',(-40:20:40),...
+		'FontSize',10)
+set(gca,'XTick',[1:19],'XTickLabel',[])
+ylabel('Change (Days)','FontSize',12)
+title('Delta LSF 2040-2069')
+grid off;
+box on;
 
-% Calculate multi-model mean tmin delta.
-tmin_mdl_delta = squeeze(nanmean(tmin_delta,3));
-
-% Load data.
-gu_sen_file = matfile('/media/alexander/Vault/Bioclimate/GU_Sensitivity.mat')
-gu_obs_file = matfile('/media/alexander/Vault/Bioclimate/GU_GridMET.mat')
-
-lsf_sen_file = matfile('/media/alexander/Vault/Bioclimate/LSF_Sensitivity.mat')
-lsf_obs_file = matfile('/media/alexander/Vault/Bioclimate/LSF_GridMET.mat')
-
-% Take difference between climatological observed and sensitivity values.
-gu_sen_mean = squeeze(nanmean(gu_sen_file.gu_CONUS,1));
-gu_obs_mean = squeeze(nanmean(gu_obs_file.gu_CONUS,1));
-gu_sen_delta = gu_sen_mean - gu_obs_mean;
-
-lsf_sen_mean = squeeze(nanmean(lsf_sen_file.lsf_CONUS,1));
-lsf_obs_mean = squeeze(nanmean(lsf_obs_file.lsf_CONUS,1));
-lsf_sen_delta = lsf_sen_mean - lsf_obs_mean;
-
-% Flip GridMET lats.
-gu_sen_delta = flipud(gu_sen_delta);
-lsf_sen_delta = flipud(lsf_sen_delta);
-
-% Plot differences.
-prj = 'Albers Equal-Area Conic';
-min_val = -45;
-max_val = 0;
-val_step = 5;
-lat_buffer = 2;
-lon_buffer = 2;
-cb_units = 'Difference (Days)';
-cb_type = 'seq';
-cb_color = 'Reds';
-cb_flip = 'Flip';
-
-map_title = 'Delta Mean LSF Date 1979-2012 (Sens.Exp.-Obs.)';
-data = lsf_sen_delta;
-figure('Position',[100 100 1000 618]);
-mapGriddedData(data,prj,min_val,max_val,val_step,...
-               lat,lon,lat_buffer,lon_buffer,...
-               map_title,cb_type,cb_color,cb_units,cb_flip)
-
-% Compare differences.
-gu_fut_file = matfile('/media/alexander/Vault/Bioclimate/GU.mat')
-lsf_fut_file = matfile('/media/alexander/Vault/Bioclimate/LSF.mat')
-
-gu_clm_diff = squeeze(gu_fut_file.clm_diff(4,:,:,:));
-gu_mdl_delta = squeeze(nanmean(gu_clm_diff,3));
-
-lsf_clm_diff = squeeze(lsf_fut_file.clm_diff(4,:,:,:));
-lsf_mdl_delta = squeeze(nanmean(lsf_clm_diff,3));
-
-% Calculate correlations.
-[r,p] = corrcoef(gu_sen_delta,gu_mdl_delta,'rows','pairwise')
-[r,p] = corrcoef(lsf_sen_delta,lsf_mdl_delta,'rows','pairwise')
-
-% Plot.
-subplot(1,2,1)
-scatter(reshape(gu_sen_delta,[585*1386 1]),reshape(gu_mdl_delta,[585*1386 1]),'+')
-axis([-90 10 -90 10])
-hold all
-h = refline(1,0)
-set(h,'Color','k','LineWidth',1.5)
-set(gca,'XTick',[-80:20:0],...
-	'XTickLabel',[-80:20:0],...
-	'YTick',[-80:20:0],...
-	'YTickLabel',[-80:20:0])
-title('Delta GU RCP8.5 vs Sensitivity')
-xlabel('Difference b/w Sens. & Obs.')
-ylabel('Difference b/w Fut. & Hst.')
-box on; grid on
-text(-30,-70,{'Pearsons r: 0.9496'; 'p-value: 0'})
-legend('Data','1:1 Reference Line','Location','Northwest')
-
-subplot(1,2,2)
-scatter(reshape(lsf_sen_delta,[585*1386 1]),reshape(lsf_mdl_delta,[585*1386 1]),'+')
-axis([-90 10 -90 10])
-hold all
-h = refline(1,0)
-set(h,'Color','k','LineWidth',1.5)
-set(gca,'XTick',[-80:20:0],...
-	'XTickLabel',[-80:20:0],...
-	'YTick',[-80:20:0],...
-	'YTickLabel',[-80:20:0])
-title('Delta LSF RCP8.5 vs Sensitivity')
-xlabel('Difference b/w Sens. & Obs.')
-ylabel('Difference b/w Fut. & Hst.')
-box on; grid on
-text(-30,-70,{'Pearsons r: 0.8662'; 'p-value: 0'})
-
-% Differences in the differences.
-gu_deltas = gu_mdl_delta - gu_sen_delta;
-lsf_deltas = lsf_mdl_delta - lsf_sen_delta;
-
-% Plot differences.
-prj = 'Albers Equal-Area Conic';
-min_val = -15;
-max_val = 15;
-val_step = 3;
-lat_buffer = 2;
-lon_buffer = 2;
-cb_units = 'Difference (Days)';
-cb_type = 'div';
-cb_color = 'RdBu';
-cb_flip = 'No Flip';
-
-map_title = 'Differences in GU Deltas (MACA - GridMET)';
-data = gu_deltas;
-figure('Position',[100 100 1000 618]);
-mapGriddedData(data,prj,min_val,max_val,val_step,...
-               lat,lon,lat_buffer,lon_buffer,...
-               map_title,cb_type,cb_color,cb_units,cb_flip)
-
-
-
+% FSEI
+subaxis(1,3,3,'SpacingHoriz',0);
+h = notBoxPlot3(ecorgn_mean(:,:,3)',[],0.3,'patch',symbols,mdl_colors);  % was 0.6
+for k=1:19
+    set(h(k).mu,'Color',rgb('Black'));
+    set(h(k).semPtch,'FaceColor',rgb('DarkGray'));
+    set(h(k).sdPtch,'FaceColor',rgb('DimGray'));
+end
+view(90,-90)	% Flip axes such that y is horizontal and x is vertical.
+set(gca,'XDir','Reverse')	% Reverse the x-axis order.
+set(gca,'YLim',[-50 50],...
+		'YTick',(-40:20:40),...
+		'YTickLabel',(-40:20:40),...
+		'FontSize',10)
+set(gca,'XTick',[1:19],'XTickLabel',[])
+ylabel('Change (%)','FontSize',12)
+title('Delta FSEI 2040-2069')
+grid off;
+box on;
 

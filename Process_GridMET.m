@@ -132,6 +132,7 @@ for x=1:length(LON_START)
 
             % Extract tmin deltas for lat/lon subsets.
             t_delta = squeeze(tmin_deltas(lat_subset,lon_subset,mdl));
+            t_delta = flipud(t_delta);
 
             % Parallel iteration over lon_subset.
             tic
