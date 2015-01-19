@@ -26,8 +26,13 @@
 %==============================================================================
 
 
-function [lsf_sub,gu_sub] = findSpringEvents(tmin,tmin_delta,...
-	photoperiod,vpd,N_DAYS,N_YRS,N_LAT,SCN);
+function [lsf_sub,gu_sub] = findSpringEvents(tmin,...
+											 photoperiod,...
+											 vpd,...
+											 N_DAYS,...
+											 N_YRS,...
+											 N_LAT,...
+											 SCN);
 
 % Uncomment if using VPD in GSI.
 % function [gu_sub] = findSpringEventsVPD(tmin,tmax,sph,pres,photoperiod,...
@@ -54,11 +59,6 @@ tmin = double(tmin - 273.15);
 % Set LSF threshold.
 THRESHOLD = single(-2.2);
 
-% Modify temperatures for sensitivity experiment.
-for lat=1:N_LAT
-	tmin_mod(:,:,lat) = tmin(:,:,lat) + tmin_delta(lat,:);
-end
-
 
 %%=============================================================================
 % Main loop.
@@ -67,7 +67,7 @@ end
 for lat=1:N_LAT
 
 	% Find non-empty latitudes.
-	f = find(~isnan(tmin_mod(:,:,lat)));
+	f = find(~isnan(tmin(:,:,lat)));
 	
 	% If tmin is not empty, iterate over years.
 	if ~isempty(f)
@@ -75,7 +75,7 @@ for lat=1:N_LAT
 		for yr=1:N_YRS
 
 			% Call LSF function.
-			lsf_sub(yr,lat) = findLSF(tmin_mod(:,yr,lat),THRESHOLD);
+			lsf_sub(yr,lat) = findLSF(tmin(:,yr,lat),THRESHOLD);
 
 			% Call dew point function - uncomment if using VPD in GSI.
             % tdew = calcDewPoint(sph(:,yr,lat),pres(lat));
@@ -84,7 +84,7 @@ for lat=1:N_LAT
             % vpd = calcVPD(tmax(:,yr,lat),tmin(:,yr,lat),tdew,pres(lat));
 
 			% Call calcGSI.m function.
-			gsi_raw(:,yr) = calcGSI(tmin_mod(:,yr,lat),photoperiod(:,lat),vpd);
+			gsi_raw(:,yr) = calcGSI(tmin(:,yr,lat),photoperiod(:,lat),vpd);
 	    	
 	    end 	% yr; N_YRS.
 		

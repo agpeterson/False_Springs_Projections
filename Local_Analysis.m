@@ -19,9 +19,9 @@
 
 % Path suffix and prefix strings to be concatenated for model access.
 PATH_PREFIX = '/media/alexander/Vault/Bioclimate/';	% Local
-VARIABLE = {'gu_';...
+VAR_NAME = {'gu_';...
 			'lsf_'};
-MODEL = {'bcc-csm1-1';...
+MDL_NAME = {'bcc-csm1-1';...
          'bcc-csm1-1-m';...
 	     'BNU-ESM';...
 	     'CanESM2';...
@@ -76,7 +76,7 @@ r85_fut1 = fut1_start_ind(2):fut1_end_ind(2);
 r85_fut2 = fut2_start_ind(2):fut2_end_ind(2);
 
 % Create structure for climatology indices.
-clm_ind = {hst_ind r45_fut1 r45_fut2 r85_fut1 r85_fut2};
+climo_ind = {hst_ind r45_fut1 r45_fut2 r85_fut1 r85_fut2};
 
 % Create constants for number of years, lat, lon, variables, and models.
 N_LAT = 585;
@@ -92,21 +92,22 @@ lsf_file = matfile('/media/alexander/Vault/Bioclimate/LSF.mat')
 fsei_file = matfile('/media/alexander/Vault/Bioclimate/FSEI.mat')
 
 % Add local paths.
-addpath(genpath('../Data'))
-addpath(genpath('../Plotting'))
+addpath(genpath('../Function_Library'))
 
 % Load MACA coords.
-load MACAv2METDATA_Coordinates
-lon = lon - 360;
+load MACA_Coords
+
+% Load ecoregion masks.
+load Ecoregion_Masks
 
 
 %%=============================================================================
-% Map all models.
+% Map individual model means and differences to check for errors.
 %==============================================================================
 
-% Map historical means.
+% Iterate over number of models. Change _file variable.
 for i=1:N_MDL
-	data = squeeze(fsei_file.clm_mean(5,:,:,i));
+	data = squeeze(fsei_file.clm_mean(1,:,:,i));
 
 	% Initialize variables.
 	prj = 'Albers Equal-Area Conic';
@@ -115,13 +116,13 @@ for i=1:N_MDL
 	val_step = 10;
 	lat_buffer = 2;
 	lon_buffer = 2;
-	cb_units = 'Day of Year';
-	cb_type = 'seq';
-	cb_color = 'Blues';
+	cb_units = 'Percent of Years';
+	cb_type = 'div';
+	cb_color = 'RdBu';
 	cb_flip = 'No Flip';
 
 	% Change map_title and data variables then run.
-	map_title = [MODEL{i} ' FSEI 1950-2005'];
+	map_title = [MDL_NAME{i} ' FSEI 1950-2005'];
 	figure('Position',[100 100 1000 618]);
 	mapGriddedData(data,prj,min_val,max_val,val_step,...
 	               lat,lon,lat_buffer,lon_buffer,...
@@ -130,10 +131,11 @@ end
 
 
 %%=============================================================================
-% Map all models.
+% Map multi-model mean climatologies.
 %==============================================================================
 
-% Map historical means.
+% Iterate over number of models. Change _file variable and take mean over
+% models.
 for i=1:N_CLM
 	data = squeeze(fsei_file.clm_mean(i,:,:,:));
 	data = nanmean(double(data),3);
@@ -146,8 +148,8 @@ for i=1:N_CLM
 	lat_buffer = 2;
 	lon_buffer = 2;
 	cb_units = 'Percent of Years';
-	cb_type = 'seq';
-	cb_color = 'Blues';
+	cb_type = 'div';
+	cb_color = 'RdBu';
 	cb_flip = 'No Flip';
 
 	% Change map_title and data variables then run.
@@ -160,16 +162,19 @@ end
 
 
 %%=============================================================================
-% Create multi-model climatology maps.
+% Map multi-model future differences.
 %==============================================================================
 
 % Map climatological means.
 clm = {'1950-2005' '2040-2069 RCP4.5' '2070-2099 RCP4.5' ...
 	   '2040-2069 RCP8.5' '2070-2099 RCP8.5'};
+
+% Iterate over number of models. Change _file variable and take mean over
+% models.
 for i=1:N_CLM
 
 	% Load data.
-	data = squeeze(fsei_file.clm_diff(i,:,:,:));
+	data = squeeze(gu_file.clm_diff(i,:,:,:));
 	data = nanmean(double(data),3);
 
 	% Initialize variables.
@@ -179,7 +184,7 @@ for i=1:N_CLM
 	val_step = 5;
 	lat_buffer = 2;
 	lon_buffer = 2;
-	cb_units = 'Difference from Historic (Days)';
+	cb_units = 'Difference (Days)';
 	cb_type = 'seq';	%div
 	cb_color = 'Reds';	%RdBu
 	cb_flip = 'Flip';	% No Flip for FSEI
@@ -194,11 +199,75 @@ end
 
 
 %%=============================================================================
-% Create NCA regions and means.
+% Map multi-model future differences with model robustness measure.
+% NOTE: FSEI needs to be tested using bootstrap. To be done on Thunder.
 %==============================================================================
 
-% Load MACA grid.
-load MACA_Coords
+% Create hst_mean and fut_diff variables with climatologies for all models.
+hst_mean = NaN(585,1386,20,3,'single');
+hst_mean(:,:,:,1) = squeeze(gu_file.clm_mean(1,:,:,:));
+hst_mean(:,:,:,2) = squeeze(lsf_file.clm_mean(1,:,:,:));
+% hst_mean(:,:,:,3) = squeeze(fsei_file.clm_mean(1,:,:,:));
+
+fut_diff = NaN(585,1386,20,3,'single');
+fut_diff(:,:,:,1) = squeeze(gu_file.clm_diff(4,:,:,:));
+fut_diff(:,:,:,2) = squeeze(lsf_file.clm_diff(4,:,:,:));
+% fut_diff(:,:,:,3) = squeeze(fsei_file.clm_diff(4,:,:,:));
+
+% Iterate over variables and call calcModelRobustness() function.
+for i=1:3
+	mdl_robustness(:,:,i) = calcModelRobustness(hst_mean(:,:,:,i),...
+		fut_diff(:,:,:,i));
+end
+
+% Map climatological means.
+var_name = {'GU' 'LSF' 'FSEI'};
+for i=1:2
+
+	% Load data.
+	data = squeeze(nanmean(fut_diff(:,:,:,i),3));
+	data(mdl_robustness(:,:,i)==0) = NaN;
+
+	% Mapping variables.
+	prj = 'Albers Equal-Area Conic';
+	lat_buffer = 2;
+	lon_buffer = 2;
+
+	% Split on i (variable) where 1 and 2 share variables and 3 differs.
+	if i < 3
+		min_val = -45;
+		max_val = 0;
+		val_step = 5;
+		cb_units = 'Difference (Days)';
+		cb_type = 'seq';	%div
+		cb_color = 'Reds';	%RdBu
+		cb_flip = 'Flip';	% No Flip for FSEI
+	else
+		min_val = -50;
+		max_val = 50;
+		val_step = 10;
+		cb_units = 'Difference (%)';
+		cb_type = 'div';	%div
+		cb_color = 'RdBu';	%RdBu
+		cb_flip = 'No Flip';	% No Flip for FSEI
+	end
+
+	% Change map_title and data variables then run.
+	map_title = ['Delta ' var_name{i} ' RCP8.5 2040-2069'];
+	figure('Position',[100 100 1000 618]);
+	mapGriddedData(data,prj,min_val,max_val,val_step,...
+	               lat,lon,lat_buffer,lon_buffer,...
+	               map_title,cb_type,cb_color,cb_units,cb_flip)
+
+	% Clear data.
+	clear data
+
+end
+
+
+%%=============================================================================
+% Create ecoregions.
+%==============================================================================
 
 % Create grid points.
 [x,y] = meshgrid(lon,lat);
@@ -234,7 +303,7 @@ for i=1:19
 	ecorgn_grid(ecorgn_masks(:,:,i)==1) = i;
 end
 
-% Plot.
+% Plot ecoregions.
 prj = 'Albers Equal-Area Conic';
 min_val = 1;
 max_val = 20;
@@ -245,7 +314,6 @@ cb_units = 'Ecoregion Divison';
 cb_type = 'qual';	%div
 cb_color = 'Set1';	%RdBu
 cb_flip = 'No Flip';	% No Flip for FSEI
-
 map_title = 'CONUS Ecoregion Divisons'
 figure('Position',[100 100 1000 618]);
 mapGriddedData(ecorgn_grid,prj,min_val,max_val,val_step,...
@@ -275,7 +343,6 @@ cb_units = 'Difference (Days)';
 cb_type = 'seq';	%div
 cb_color = 'Reds';	%RdBu
 cb_flip = 'Flip';	% No Flip for FSEI
-
 map_title = 'Ecoregion Delta GU RCP8.5 2040-2069'
 figure('Position',[100 100 1000 618]);
 mapGriddedData(conus_grid,prj,min_val,max_val,val_step,...
@@ -287,17 +354,14 @@ mapGriddedData(conus_grid,prj,min_val,max_val,val_step,...
 % Model spread boxplots.
 %==============================================================================
 
-% Load ecoregion masks.
-load Ecoregion_Masks
-
 % Create ecoregion means for all models.
 for i=1:3
 
 	% Switch cases on i to extract lat, lon, and mdl for variables.
     switch i,
-        case 1, data = double(squeeze(gu_file.clm_diff(4,:,:,:)));
-        case 2, data = double(squeeze(lsf_file.clm_diff(4,:,:,:)));
-        case 3, data = double(squeeze(fsei_file.clm_diff(4,:,:,:)));
+        case 1, data = double(squeeze(gu_file.clm_mean(1,:,:,:)));
+        case 2, data = double(squeeze(lsf_file.clm_mean(1,:,:,:)));
+        case 3, data = double(squeeze(fsei_file.clm_mean(1,:,:,:)));
     end
 
 	% Iterate over models and ecoregions, creating a temporary copy of model
@@ -413,4 +477,89 @@ ylabel('Change (%)','FontSize',12)
 title('Delta FSEI 2040-2069')
 grid off;
 box on;
+
+% Print statistics for each ecoregion.
+for i=1:19
+    mdl_max(i,:) = squeeze(max(ecorgn_mean(i,:,:)));
+    mdl_mean(i,:) = squeeze(mean(ecorgn_mean(i,:,:)));
+    mdl_min(i,:) = squeeze(min(ecorgn_mean(i,:,:)));
+    mdl_stnd(i,:) = squeeze(std(ecorgn_mean(i,:,:)));
+end
+stats = [mdl_max,mdl_mean,mdl_min,mdl_stnd];
+
+% Set variable names.
+var_names = {'GU_max'...
+             'LSF_max'...
+             'FSEI_max'...
+             'GU_mean'...
+             'LSF_mean'...
+             'FSEI_mean'...
+             'GU_min'...
+             'LSF_min'...
+             'FSEI_min'...
+             'GU_stnd'...
+             'LSF_stnd'...
+             'FSEI_stnd'};
+
+% Create table and print.
+summary_table = array2table(stats,'VariableNames',var_names,...
+    'RowNames',ecorgn_names)
+writetable(summary_table,'Hst_Stats','Delimiter',',','WriteRowNames',true)
+
+
+%%=============================================================================
+% Sensitivity experiments.
+%==============================================================================
+
+% Look at delta tmin.
+tmin_file = matfile('/media/alexander/Vault/Bioclimate/MACA_Tmin.mat')
+
+% Calculate delta.
+for i=1:20
+    tmin_hst = tmin_file.data(:,:,1,i) - 273.15;
+    tmin_fut = tmin_file.data(:,:,3,i) - 273.15;
+    tmin_delta(:,:,i) = tmin_fut - tmin_hst;
+end
+
+% Look at histograms.
+for i=1:20
+    figure();
+    histx(reshape(tmin_delta(:,:,i),[585*1386 1]))
+end
+
+% Flip to match GridMET coords.
+tmin_delta = flipud(tmin_delta);
+
+% Save to file to be uploaded to Thunder.
+save('Tmin_Delta.mat','tmin_delta');
+
+% Plot METDATA and sensitivity experiments.
+file = matfile('/media/alexander/Vault/Bioclimate/GU_Sensitivity.mat')
+
+% Plot.
+prj = 'Albers Equal-Area Conic';
+min_val = 1;
+max_val = 181;
+val_step = 20;
+lat_buffer = 2;
+lon_buffer = 2;
+cb_units = 'Day of Year';
+cb_type = 'div';	%div
+cb_color = 'RdBu';	%RdBu
+cb_flip = 'No Flip';	% No Flip for FSEI
+map_title = 'GU Sensitivity';
+
+for i=1:20
+	disp(i)
+	tmp = squeeze(nanmean(file.data(:,:,:,i),1));
+	
+	figure('Position',[100 100 1000 618]);
+	mapGriddedData(tmp,prj,min_val,max_val,val_step,...
+		            lat,lon,lat_buffer,lon_buffer,...
+		            map_title,cb_type,cb_color,cb_units,cb_flip)
+end
+
+
+
+
 

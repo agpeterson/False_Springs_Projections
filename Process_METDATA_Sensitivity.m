@@ -1,5 +1,5 @@
 %%=============================================================================
-% NAME:   Process_GRIDMET.m
+% NAME:   Process_METDATA_Sensitivity.m
 % AUTHOR: Alexander Peterson
 % DATE:   15 Nov. 2014
 %
@@ -49,9 +49,9 @@ lsf_file.data = NaN(N_YRS,N_LAT,N_LON,N_MDL,'single');
 gu_file.data = NaN(N_YRS,N_LAT,N_LON,N_MDL,'single');
 
 % Load tmin deltas for sensitivity experiment.
-disp('Accessing and loading MACA tmin deltas...')
-tmin_delta_file = matfile('Tmin_Deltas.mat');
-tmin_deltas = squeeze(tmin_delta_file.data(:,:,3,:));
+disp('Loading MACA tmin delta...')
+load('Tmin_Delta.mat');
+
 
 %%=============================================================================
 % GSI constants.
@@ -66,7 +66,7 @@ disp('Creating day length and VPD variables...')
 % save('day_length.mat','day_length')
 
 % Open day_length data.
-load('Day_Length_GridMET.mat')
+load('Day_Length_METDATA.mat')
 day_length = day_length(DAY_IND,:);
 
 % Find where photoperiod is greater than or less than bounds and normalize; 
@@ -107,7 +107,7 @@ for x=1:length(LON_START)
     for y=1:length(LAT_START)
 
         % Write lon and lat cell to output.
-        disp({'\tLon: ',x; '\tLat: ',y})
+        disp({'Lon: ',x; 'Lat: ',y})
     
         % Break CONUS into regional lat subsets.
         lat_subset = [LAT_START(y):LAT_END(y)];
@@ -122,21 +122,22 @@ for x=1:length(LON_START)
 
         % Create temporary variable to store daily and yearly data for
         % each lat/lon subset. Replace -9999 (missing values) with NaN.
-        disp('\tLoading temperature data...')
+        disp('Loading temperature data...')
         t_tmin = tmin_file.data(DAY_IND,YR_IND,lat_subset,lon_subset);
         t_tmin(t_tmin == -9999) = NaN;
 
         % Model loop.
-        disp('\tEntering model loop...')
+        disp('Entering model loop...')
         for mdl=1:N_MDL
 
+            disp({'Model: ',mdl})
+
             % Extract tmin deltas for lat/lon subsets.
-            t_delta = squeeze(tmin_deltas(lat_subset,lon_subset,mdl));
-            t_delta = flipud(t_delta);
+            t_delta = squeeze(tmin_delta(lat_subset,lon_subset,mdl));
 
             % Parallel iteration over lon_subset.
             tic
-            disp('\tEntering parallel loop...')
+            disp('Entering parallel loop...')
             parfor lon=1:n_lon
 
                 % Call parallel function.
@@ -153,7 +154,7 @@ for x=1:length(LON_START)
             toc
 
             % Write regional subsets to file.
-            disp('\tWriting output to file...')
+            disp('Writing output to file...')
             lsf_file.data(1:30,lat_subset,lon_subset,mdl) = lsf_subset;
             gu_file.data(1:30,lat_subset,lon_subset,mdl) = gu_subset;
 
