@@ -100,16 +100,16 @@ fsei_file.clm_mean = NaN(N_CLM,N_LAT,N_LON,N_MDL,'single');
 for i=1:N_MDL
 
 	% Concatenate to create filename for pointer.
-	gu_filename = [PATH_PREFIX,char(VARIABLE{1}),char(MODEL{i}),FILE_EXT];
-	lsf_filename = [PATH_PREFIX,char(VARIABLE{2}),char(MODEL{i}),FILE_EXT];
+	gu_file = [PATH_PREFIX,char(VARIABLE{1}),char(MODEL{i}),FILE_EXT];
+	lsf_file = [PATH_PREFIX,char(VARIABLE{2}),char(MODEL{i}),FILE_EXT];
 	
 	% Create file pointers.
-	gu_data = matfile(gu_filename);
-	lsf_data = matfile(lsf_filename);
+	gu_data = matfile(gu_file);
+	lsf_data = matfile(lsf_file);
 
 	% Print file to screen.
-	disp(['Accessed file ', gu_filename])
-	disp(['Accessed file ', lsf_filename])
+	disp(['Accessed file ', gu_file])
+	disp(['Accessed file ', lsf_file])
 
 	% Load model data into memory.
 	gu = double(gu_data.gsi_CONUS);
@@ -159,7 +159,7 @@ for i=1:N_MDL
 	fsei_file.clm_mean(:,:,:,i) = single(fsei);
 
 	% Clear variables.
-	clear gu_filename lsf_filename gu_data lsf_data fs fs_sum lsf_sum fsei
+	clear gu_file lsf_file gu_data lsf_data fs fs_sum lsf_sum fsei
 	clear lsf gu
 
 end 	% j; 1:N_MDL
@@ -183,16 +183,16 @@ lsf_file.clm_diff = NaN(N_CLM,N_LAT,N_LON,N_MDL,'single');
 for i=1:N_MDL
 
 	% Concatenate to create filename for pointer.
-	gu_filename = [PATH_PREFIX,char(VARIABLE{1}),char(MODEL{i}),FILE_EXT];
-	lsf_filename = [PATH_PREFIX,char(VARIABLE{2}),char(MODEL{i}),FILE_EXT];
+	gu_file = [PATH_PREFIX,char(VARIABLE{1}),char(MODEL{i}),FILE_EXT];
+	lsf_file = [PATH_PREFIX,char(VARIABLE{2}),char(MODEL{i}),FILE_EXT];
 	
 	% Create file pointers.
-	gu_data = matfile(gu_filename);
-	lsf_data = matfile(lsf_filename);
+	gu_data = matfile(gu_file);
+	lsf_data = matfile(lsf_file);
 
 	% Print file to screen.
-	disp(['Accessed file ', gu_filename])
-	disp(['Accessed file ', lsf_filename])
+	disp(['Accessed file ', gu_file])
+	disp(['Accessed file ', lsf_file])
 
 	% Load model data into memory.
 	gu = double(gu_data.gsi_CONUS);
@@ -233,7 +233,7 @@ for i=1:N_MDL
 	lsf_file.clm_diff(:,:,:,i) = single(lsf_clm_diff);
 
 	% Clear variables.
-	clear gu_filename lsf_filename gu_data lsf_data lsf gu
+	clear gu_file lsf_file gu_data lsf_data lsf gu
 
 end 	% j; 1:N_MDL
 
@@ -301,5 +301,145 @@ tmin_mdl_delta = squeeze(nanmean(tmin_delta,3));
 
 % Save delta to be used in sensitivity experiment.
 save('tmin_delta.mat','tmin_mdl_delta')
+
+
+%%=============================================================================
+% Sensitivity analysis/experiments.
+%==============================================================================
+
+gu_exp_file = matfile('GU_Sensitivity.mat');
+lsf_exp_file = matfile('LSF_Sensitivity.mat');
+
+% Set up variables and data before calling calcFSEI() function.
+gu = gu_exp_file.data;
+lsf = lsf_exp_file.data;
+day_lag = 7;
+yrs_ind = 1:30;
+climo_ind = {yrs_ind}
+
+% Derive FSEI.
+[fs_exp,fsei_exp] = calcFSEI(gu,lsf,day_lag,climo_ind);
+
+% Convert to single and save.
+fsei = single(fsei_exp);           
+fs = single(fs_exp);
+save('FSEI_Sensitivity.mat','fsei','fs')
+
+% Determine significance between experiments and observed.
+gu_obs_file = matfile('GU_METDATA')
+lsf_obs_file = matfile('LSF_METDATA')
+
+% Load data into memory.
+gu_obs = gu_obs_file.data;
+lsf_obs = lsf_obs_file.data;
+
+% Derive FSEI.
+[fs_obs,fsei_obs] = calcFSEI(gu_obs,lsf_obs,day_lag,climo_ind);
+
+% Convert to single and save.
+fsei = single(fsei_obs);
+fs = single(fs_obs);
+save('FSEI_METDATA.mat','fsei','fs')
+
+% Determine change and statistical significance for each model.
+% Create constants for lat, lon, and models.
+N_LAT = 585;
+N_LON = 1386;
+N_MDL = 20;
+N_YRS = 30;
+
+% Open matfile and preallocate.
+file = matfile('FSEI_METDATA_Change.mat','Writable',true);
+file.fs_change = NaN(N_LAT,N_LON,N_MDL,'single');
+file.fs_significance = NaN(N_LAT,N_LON,N_MDL,'single');
+
+% Year indices variable.
+yr_ind = 1:30;
+
+% Set parallel pool options.
+opts = statset('UseParallel','always');
+
+% Open parallel processor pool.
+disp('Opening parallel processor pool...')
+if matlabpool('size') == 0
+    matlabpool open local 12
+end
+
+% Iterate over all sensitivity runs.
+for i=1:N_MDL
+	tic
+	disp({'Model: ' i})
+
+	% Create temporary variable for each sensitivity run.
+	disp('Creating temporary variable for each sensitivity run...')
+	fs_tmp = squeeze(fs_exp(:,:,:,i));
+
+	% Bootstrap resampling. Iterate over lon and call bootstrp() function using
+	% 1000 samples, taking the mean of the difference between the future and 
+	% historic periods.
+	disp('Preallocating bootstrap variable...')
+	fs_bootstrap = NaN(1000,N_LAT,N_LON);
+
+	disp('Bootstrap function call...')
+	for x=1:N_LON
+	    fs_bootstrap(:,:,x) = bootstrp(1000,@nanmean,...
+	    	fs_tmp(yr_ind,:,x)-fs_obs(yr_ind,:,x),'Options',opts);
+	end
+
+	% Change and significance.
+	% Magnitude of change.
+	disp('Calculating magnitude of change...')
+	fs_change = squeeze(nanmean(fs_bootstrap,1));
+
+	% Find lat/lon greater/less than 0 to determine increasing/decreasing
+	% false springs.
+	disp('Determining statistical significance...')
+	fs_greater = squeeze(nansum(fs_bootstrap > 0));
+	fs_less = squeeze(nansum(fs_bootstrap < 0));
+	fs_increase = fs_greater >= 0.95*1000;
+	fs_decrease = fs_less >= 0.95*1000;
+
+	% Iterate over lat/lon and classify significance.
+	for x=1:N_LON
+	    for y=1:N_LAT
+	        if fs_decrease(y,x) == 1 || fs_increase(y,x) == 1
+	            fs_significance(y,x) = 1;
+	        else
+	            fs_significance(y,x) = 0;
+	        end
+	    end
+	end
+
+	% Write output to file.
+	disp('Writing output to file...')
+	file.fs_change(:,:,i) = single(fs_change);
+	file.fs_significance(:,:,i) = single(fs_significance);
+
+	toc
+	% Clear variables.
+	clear fs_tmp fs_bootstrap fs_greater fs_less fs_increase fs_decrease
+	clear fs_significance fs_change
+
+end 	% i; 1:N_MDL
+
+
+%% Create multi-model mean FSEI change and significance.
+% Take the mean of change, find where 90% of models agree on significance.
+
+fs_mdl_change = squeeze(nanmean(double(fs_change),3));
+test = nansum(fs_significance,3);
+
+for x=1:1386
+	for y=1:585
+		if test(y,x) >= (20*.75)
+			test2(y,x) = 1;
+		elseif test(y,x) < (20*.75)
+			test2(y,x) = 0;
+		end
+	end
+end
+
+
+
 
 
