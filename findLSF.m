@@ -1,12 +1,11 @@
 %%=============================================================================
 % NAME:   findLSF.m
-% AUTHOR: John Abatzoglou, Alexander Peterson, Katherine Hegewisch
+% AUTHOR: Alexander Peterson
 % DATE:   1 Nov. 2014
 %
 % DESC:   This function finds the last spring freeze date for one year of daily
 %		  minimum temperature.
 % REF:	  Richardson et al. (1975)
-% NOTE:	  Inputs can be class-type single or double.
 %
 % IN:     tmin - Daily minimum temperature in units C in row/column vector.
 %		  THRESHOLD - Threshold constant defining spring freeze as scalar value.

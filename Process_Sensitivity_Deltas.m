@@ -1,18 +1,21 @@
-%%=============================================================================
-% NAME:   Model_Comparisons.m
-% AUTHOR: Alexander Peterson
-% DATE:   1 Dec. 2014
+%%============================================================================
 %
-% DESC:   Standard deviation of daily tmin by season.
-% REF:	  None.
-% NOTE:	  
+% NAME:     Process_Sensitivity_Deltas.m
+% AUTH:     Alexander Peterson
+% DATE:     8 Feb. 2015
+% DESC:     This script accesses MACAv2-METDATA tmin files to create mean tmin
+%           and standard deviation for use in sensitivity analysis of false 
+%           springs.
 %
-% IN:     
-% OUT:    
-% CALL:   
-%==============================================================================
+%=============================================================================
 
-% Create model, experiment, and variable strings to be concatenated.
+
+
+%%============================================================================
+% Initial variables and constants.
+%-----------------------------------------------------------------------------
+
+% Variable and model names.
 MDL_NAME = {'bcc-csm1-1';...
             'bcc-csm1-1-m';...
             'BNU-ESM';...
@@ -34,7 +37,7 @@ MDL_NAME = {'bcc-csm1-1';...
             'MRI-CGCM3';...
             'NorESM1-M'};
 
-% Create path suffix and prefix strings to be concatenated.
+% File prefix and suffix to be concatenated for file access.
 FILE_PREFIX = '/storage/DOWNSCALED/CMIP5/MACAv2-METDATA/maca_v2_metdata_2var_10pat_CONUS_';
 FILE_SUFFIX = {'_historical_tasmin.mat';...
                '_rcp85_tasmin.mat'};
@@ -44,20 +47,29 @@ FILE_SUFFIX = {'_historical_tasmin.mat';...
 LON_START = [1 701];
 LON_END = [700 1386];
 
-% Create constant for number of years, lat, lon, and models.
+% Create iteration constants.
 N_LAT = 585;
 N_LON = 1386;
 N_MDL = 20;
 N_EXP = 2;
 
-% Create and preallocate file.
-out_file = matfile('MACA_Sensitivity_Deltas.mat','writable',true);
+
+%-----------------------------------------------------------------------------
+% Create and preallocate output file.
+%-----------------------------------------------------------------------------
+out_file = matfile('MACA_Sensitivity_Deltas.mat','Writable',true);
 out_file.hst_mean = NaN(N_LAT,N_LON,N_MDL,'single');
 out_file.hst_stnd = NaN(N_LAT,N_LON,N_MDL,'single');
 out_file.fut_mean = NaN(N_LAT,N_LON,N_MDL,'single');
 out_file.fut_stnd = NaN(N_LAT,N_LON,N_MDL,'single');
 
-% main loop.
+
+
+%%============================================================================
+% Main loop to access matfiles. Splits on N_EXP to determine number of years
+% (56 for historical; 30 for future).
+%-----------------------------------------------------------------------------
+
 disp('Entering model loop...')
 for i=1:N_MDL
 
@@ -69,20 +81,28 @@ for i=1:N_MDL
 		file = matfile(file_name);
 		disp(['Accessed ',char(MDL_NAME(i)),char(FILE_SUFFIX(j))])
 
-        % Create n_yrs variable based on experiment.
+
+        %---------------------------------------------------------------------
+        % Historic file access and processing. Create n_yrs variable and 
+        % preallocate before entering LON loop.
+        %---------------------------------------------------------------------
         if j == 1
 
-            % Create n_yrs variable based on experiment.
             n_yrs = 56;
 
-            % Preallocate model mean temperatures.
             disp('Preallocating stnd variable...')
             tmin_mean = NaN(n_yrs,N_LAT,N_LON,'single');
             tmin_stnd = NaN(n_yrs,N_LAT,N_LON,'single');
             tmin_mean_climo = NaN(N_LAT,N_LON,'single');
             tmin_stnd_climo = NaN(N_LAT,N_LON,'single');
 
-            % Iterate over LON.
+
+            %-----------------------------------------------------------------
+            % Iterate over LON to extract data. Pull days 60:151
+            % (corresponding to Mar-May) for years 1-56 (1950-2005). Take the
+            % seasonal mean and standard deviation, then calculate the
+            % climatological mean of both.
+            %-----------------------------------------------------------------
             disp('Entering LON loop...')
             for k=1:length(LON_START)
 
@@ -94,14 +114,14 @@ for i=1:N_MDL
                 disp('Loading historical TMIN data for days 60-151...')
                 t_tmin = file.data(60:151,1:56,:,lon_subset) - 273.15;
 
-                % Calculate mean tmin for day window.
-                disp('Taking daily stnd for all years...')
-                t_mean = squeeze(nanmean(t_tmin),1);
+                % Calculate mean and stnd.
+                disp('Taking mean and stnd for all years...')
+                t_mean = squeeze(nanmean(t_tmin,1));
                 t_stnd = squeeze(nanstd(t_tmin));
                 tmin_mean(:,:,lon_subset) = t_mean;
                 tmin_stnd(:,:,lon_subset) = t_stnd;
 
-                % Calculate mean tmin over all years.
+                % Calculate climatological means.
                 disp('Taking climatological mean...')
                 t_mean_climo = squeeze(nanmean(t_mean,1));
                 t_stnd_climo = squeeze(nanmean(t_stnd,1));
@@ -113,11 +133,19 @@ for i=1:N_MDL
 
             end     % k; 1:length(LON_START)
 
+
+            %-----------------------------------------------------------------
             % Write output to file.
+            %-----------------------------------------------------------------
             disp('Writing output to file...')
             out_file.hst_mean(:,:,i) = tmin_mean_climo;
             out_file.hst_stnd(:,:,i) = tmin_stnd_climo;
 
+        
+        %---------------------------------------------------------------------
+        % Future file access and processing; doesn't require LON loop. Similar
+        % to LON loop above.
+        %---------------------------------------------------------------------
         else
             
             % Create n_yrs variable based on experiment.
@@ -127,12 +155,12 @@ for i=1:N_MDL
             disp('Loading future TMIN data for days 60-151...')
             t_tmin = file.data(60:151,35:64,:,:) - 273.15;
 
-            % Calculate mean tmin for day window.
-            disp('Taking daily stnd for all years...')
+            % Calculate mean and stnd.
+            disp('Taking mean and stnd for all years...')
             tmin_mean = squeeze(nanmean(t_tmin,1));
             tmin_stnd = squeeze(nanstd(t_tmin));
 
-            % Calculate mean tmin over all years.
+            % Calculate climatological means.
             disp('Taking climatological mean...')
             tmin_mean_climo = squeeze(nanmean(tmin_mean,1));
             tmin_stnd_climo = squeeze(nanmean(tmin_stnd,1));
@@ -147,6 +175,28 @@ for i=1:N_MDL
     end 	% j; 1:N_EXP
 end 	% i; 1:N_MDL
 
-% Exit MATLAB.
+
+
+%%============================================================================
+% Create deltas.
+%-----------------------------------------------------------------------------
+
+% Load data into memory.
+load('MACA_Sensitivity_Deltas.mat')
+
+% Iterate over models to create deltas between historic and future values.
+for i=1:N_MDL
+    delta_mean(:,:,i) = fut_mean(:,:,i) - hst_mean(:,:,i);
+    delta_stnd(:,:,i) = (fut_stnd(:,:,i) - hst_stnd(:,:,i)) ./ hst_stnd(:,:,i);
+end
+
+% Append to matfile.
+save('MACA_Sensitivity_Deltas.mat','delta_mean','delta_stnd','-append')
+
+
+
+%%============================================================================
+% Exit program.
+%-----------------------------------------------------------------------------
 disp('Exiting MATLAB...')
 exit

@@ -1,6 +1,6 @@
 %%=============================================================================
 % NAME:   calcGSI.m
-% AUTHOR: John Abatzoglou, Alexander Peterson, Katherine Hegewisch
+% AUTHOR: Alexander Peterson
 % DATE:   1 Nov. 2014
 %
 % DESC:   This function calculates the Growing Season Index (GSI) using minimum 

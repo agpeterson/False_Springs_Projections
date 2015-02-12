@@ -1,14 +1,11 @@
 %%=============================================================================
-% NAME:   findSpringEvents.m
-% AUTHOR: John Abatzoglou, Alexander Peterson, Katherine Hegewisch
-% DATE:   1 Nov. 2014
 %
+% NAME:   findSpringEvents.m
+% AUTHOR: Alexander Peterson
+% DATE:   1 Nov. 2014
 % DESC:   The function iterates in parallel over the MACAv2-METDATA dataset
 %		  and returns last spring freeze and green-up dates as subsets of
 %		  CONUS.
-% REF:	  None.
-% NOTE:	  Inputs can be class-type single or double.
-%
 % IN:     tmin - Daily minimum temperature in units K in row/column vector.
 %		  gsi_max - Max GSI values pre-calculated or empty array.
 %		  photoperiod - Photoperiod for all calendar days in row/column vector.
@@ -23,10 +20,11 @@
 %		  gu_sub - Subset of green-up dates.
 %		  gsi_max - Max GSI values to be used in normalization.
 % CALL:   findLSF.m; calcGSI.m; findGreenup.m
+%
 %==============================================================================
 
 
-function [lsf_sub,gu_sub] = findSpringEvents(tmin,tmin_delta,...
+function [lsf_sub,gu_sub] = findSpringEvents(tmin,delta,...
 	photoperiod,vpd,N_DAYS,N_YRS,N_LAT,SCN);
 
 % Uncomment if using VPD in GSI.
@@ -46,7 +44,7 @@ gsi_max = NaN(N_LAT,1,'single');
 
 % Convert from Kelvin to C and cast inputs as doubles.
 tmin = double(tmin - 273.15);
-tmin_delta = double(tmin_delta);
+delta = double(delta);
 
 % Uncomment if using VPD in GSI.
 % tmax = double(tmax - 273.15);
@@ -57,7 +55,7 @@ THRESHOLD = single(-2.2);
 
 % Modify temperatures for sensitivity experiment.
 for lat=1:N_LAT
-	tmin_mod(:,:,lat) = tmin(:,:,lat) + tmin_delta(lat,:);
+	tmin_mod(:,:,lat) = tmin(:,:,lat) + delta(lat,:);
 end
 
 

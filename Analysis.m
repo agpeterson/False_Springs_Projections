@@ -1,9 +1,9 @@
 %%============================================================================
 %
-% NAME:   Analysis.m
-% AUTHOR: Alexander Peterson
-% DATE:   22 Jan. 2015
-% DESC:   Script containing code analyzing GU, LSF, and FSEI.
+% NAME:		Analysis.m
+% AUTH:		Alexander Peterson
+% DATE:		22 Jan. 2015
+% DESC:		Script containing code analyzing GU, LSF, and FSEI.
 %
 %=============================================================================
 
@@ -249,6 +249,7 @@ fsei_mdl = squeeze(nanmean(double(hst_file.fsei),3));
 gu_obs = double(flipud(obs_file.gu_mean));
 lsf_obs = double(flipud(obs_file.lsf_mean));
 fsei_obs = double(flipud(obs_file.fsei));
+
 
 %-----------------------------------------------------------------------------
 % Map.

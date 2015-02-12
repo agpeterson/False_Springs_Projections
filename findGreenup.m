@@ -1,6 +1,6 @@
 %%=============================================================================
 % NAME:   findGreenup.m
-% AUTHOR: John Abatzoglou, Alexander Peterson, Katherine Hegewisch
+% AUTHOR: Alexander Peterson
 % DATE:   1 Nov. 2014
 %
 % DESC:   This function processes raw daily GSI data, as calculated by the

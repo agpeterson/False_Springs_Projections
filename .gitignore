@@ -8,10 +8,5 @@
 *.pdf
 *.png
 *.txt
-Data/
-Figures/
-y/
+*/
 Neverland.m
-Script.m
-Run_Script.sh
-Legacy/

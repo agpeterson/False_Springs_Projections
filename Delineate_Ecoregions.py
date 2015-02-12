@@ -1,9 +1,11 @@
 #==============================================================================
+#
 # Name:		Delineate_Ecoregions.py
 # Auth:		Alexander Peterson
 # Date:		2 Jan. 2015
 # Desc:		Python script employing the Arcpy module to extract point
 #			coordinates based on ecoregion divisions.
+#
 #==============================================================================
 
 
